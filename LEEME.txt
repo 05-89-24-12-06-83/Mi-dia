@@ -1,0 +1,27 @@
+MI DÍA v1.4b — DOBLE SONIDO + VIBRACIÓN REFORZADA
+
+Sube SOLO este archivo a la raíz del repositorio:
+- alarm-fix.js
+
+Debe REEMPLAZAR el alarm-fix.js actual.
+
+Cambios:
+- La melodía de la alarma suena dos veces seguidas en cada ciclo.
+- La alarma sigue deteniéndose al marcar ✓ Completar.
+- Vibración reforzada con patrones más largos.
+- Vibración adicional al abrir el cuadro de alarma.
+- La vibración se cancela al Completar o Posponer.
+- "Activar avisos" también prueba una vibración fuerte.
+
+Prueba:
+1. Abre Mi Día.
+2. Pulsa Activar avisos.
+3. Crea una tarea para dentro de 2 minutos.
+4. Activa sonido y vibración.
+5. Pulsa Probar sonido: debe escucharse DOBLE.
+6. Pulsa Probar vibración.
+
+Si "Probar vibración" sigue sin vibrar, Android está bloqueando la Web Vibration API
+por configuración del sistema, modo silencio/no molestar, ahorro de energía o políticas
+del navegador/PWA. En ese caso el código ya está enviando la vibración, pero el sistema
+no la ejecuta.
