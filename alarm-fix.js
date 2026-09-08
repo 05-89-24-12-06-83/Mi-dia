@@ -60,6 +60,7 @@
     tone(ctx,880,t,.45,v,'sine');tone(ctx,1320,t+.12,.7,v*.6,'sine');return .9
   }
 
+  // Doble sonido aprobado.
   window.playMelody=async function(type='soft-bell',volume=70){
     try{
       const ctx=ensureAudio();
@@ -88,88 +89,13 @@
     }
   };
 
-  function showToast(message,ok=true){
-    let t=document.querySelector('#miDiaDiagToast');
-    if(!t){
-      t=document.createElement('div');
-      t.id='miDiaDiagToast';
-      Object.assign(t.style,{
-        position:'fixed',left:'50%',bottom:'28px',transform:'translateX(-50%)',
-        zIndex:'99999',maxWidth:'90vw',padding:'12px 16px',borderRadius:'14px',
-        fontWeight:'700',fontSize:'14px',boxShadow:'0 12px 32px rgba(0,0,0,.35)'
-      });
-      document.body.appendChild(t);
-    }
-    t.textContent=message;
-    t.style.background=ok?'#0d2f27':'#44202a';
-    t.style.color=ok?'#7ff0c5':'#ffb3c1';
-    t.style.border=ok?'1px solid #1d765d':'1px solid #8b3a4c';
-    t.hidden=false;
-    clearTimeout(t._hide);
-    t._hide=setTimeout(()=>t.hidden=true,5000);
-  }
-
-  async function getReadyRegistration(){
-    if(!('serviceWorker' in navigator))throw new Error('Service Worker no compatible');
-    let reg=await navigator.serviceWorker.getRegistration();
-    if(!reg)reg=await navigator.serviceWorker.register('sw.js',{updateViaCache:'none'});
-    // navigator.serviceWorker.ready resuelve cuando existe un worker activo.
-    return await navigator.serviceWorker.ready;
-  }
-
-  async function publishTestNotification(){
-    try{
-      showToast('Comprobando notificaciones…');
-      if(!('Notification' in window))throw new Error('Este dispositivo no admite Notification API');
-
-      let permission=Notification.permission;
-      if(permission!=='granted'){
-        permission=await Notification.requestPermission();
-      }
-      if(permission!=='granted'){
-        throw new Error(permission==='denied'?'Permiso de notificaciones bloqueado':'Permiso no concedido');
-      }
-
-      const reg=await getReadyRegistration();
-      if(typeof reg.showNotification!=='function'){
-        throw new Error('showNotification no está disponible');
-      }
-
-      // Prueba mínima: sin icono, badge, vibración ni otras opciones.
-      // Así aislamos cualquier rechazo causado por opciones no compatibles.
-      const tag='mi-dia-test-'+Date.now();
-      await reg.showNotification('Mi Día',{
-        body:'Notificación de prueba. Si ves esto, los avisos ya funcionan.',
-        tag,
-        requireInteraction:true
-      });
-
-      // Verificación interna: el navegador debe poder recuperar la notificación activa.
-      await new Promise(r=>setTimeout(r,350));
-      let active=[];
-      try{active=await reg.getNotifications({tag})}catch{}
-      if(active.length){
-        showToast('✓ Notificación publicada. Revisa la barra superior.');
-      }else{
-        showToast('La API aceptó el aviso, pero Android no lo muestra.',false);
-      }
-      return true;
-    }catch(err){
-      console.error('Mi Día notification diagnostic:',err);
-      showToast('Avisos: '+(err?.message||String(err)),false);
-      alert('Mi Día no pudo publicar la notificación.\n\nDetalle: '+(err?.message||String(err)));
-      return false;
-    }
-  }
-
-  // Desbloqueo de audio.
-  const prime=()=>{ unlockAudio(); };
+  const prime=()=>{unlockAudio()};
   ['pointerdown','touchstart','keydown'].forEach(evt=>{
     document.addEventListener(evt,prime,{once:true,passive:true,capture:true});
   });
-  document.querySelector('#taskForm')?.addEventListener('submit',()=>{ unlockAudio(); },{capture:true});
 
-  // Prueba de sonido.
+  document.querySelector('#taskForm')?.addEventListener('submit',()=>{unlockAudio()},{capture:true});
+
   const previewSound=document.querySelector('#previewSound');
   if(previewSound){
     previewSound.onclick=async()=>{
@@ -181,16 +107,13 @@
     };
   }
 
-  // Prueba de vibración.
   const previewVibration=document.querySelector('#previewVibration');
   if(previewVibration){
     previewVibration.onclick=()=>{
-      const ok=window.vibrateWith(document.querySelector('#vibrationPattern')?.value);
-      showToast(ok?'Orden de vibración enviada':'Vibración web no compatible',ok);
+      window.vibrateWith(document.querySelector('#vibrationPattern')?.value);
     };
   }
 
-  // Al abrir el cuadro de alarma.
   const alarmDialog=document.querySelector('#alarmDialog');
   if(alarmDialog){
     const observer=new MutationObserver(()=>{
@@ -200,59 +123,81 @@
     observer.observe(alarmDialog,{attributes:true,attributeFilter:['open']});
   }
 
-  // Reemplaza el flujo anterior: no silencia errores.
-  const activate=document.querySelector('#requestNotifications');
-  if(activate){
-    activate.onclick=async()=>{
-      await unlockAudio();
-      await publishTestNotification();
-    };
+  function updateAvisosButton(){
+    const mobile=document.querySelector('#requestNotificationsMobile');
+    if(!mobile)return;
+    if('Notification' in window && Notification.permission==='granted'){
+      mobile.textContent='🔔 Activos';
+      mobile.title='Notificaciones activas';
+      mobile.dataset.active='true';
+    }else{
+      mobile.textContent='🔔 Avisos';
+      mobile.title='Activar avisos';
+      mobile.dataset.active='false';
+    }
   }
 
-  // Botón visible en móvil.
+  async function enableNotifications(){
+    await unlockAudio();
+
+    if(!('Notification' in window)){
+      alert('Este dispositivo no admite notificaciones web.');
+      return false;
+    }
+
+    // Si ya están activas, no genera otra notificación ni mensaje de prueba.
+    if(Notification.permission==='granted'){
+      localStorage.setItem('midia.notifications.enabled','1');
+      if(typeof updateNotifStatus==='function')updateNotifStatus();
+      updateAvisosButton();
+      return true;
+    }
+
+    if(Notification.permission==='denied'){
+      alert('Las notificaciones están bloqueadas en Android. Actívalas desde Ajustes > Mi Día > Notificaciones.');
+      updateAvisosButton();
+      return false;
+    }
+
+    const permission=await Notification.requestPermission();
+    if(typeof updateNotifStatus==='function')updateNotifStatus();
+
+    if(permission==='granted'){
+      localStorage.setItem('midia.notifications.enabled','1');
+      updateAvisosButton();
+      return true;
+    }
+
+    updateAvisosButton();
+    return false;
+  }
+
+  const activate=document.querySelector('#requestNotifications');
+  if(activate)activate.onclick=enableNotifications;
+
   const topActions=document.querySelector('.top-actions');
   if(topActions && !document.querySelector('#requestNotificationsMobile')){
     const mobileBtn=document.createElement('button');
     mobileBtn.id='requestNotificationsMobile';
     mobileBtn.type='button';
     mobileBtn.className='ghost';
-    mobileBtn.textContent='🔔 Avisos';
-    mobileBtn.setAttribute('aria-label','Probar notificación');
-    mobileBtn.title='Probar notificación';
-    mobileBtn.onclick=()=>publishTestNotification();
+    mobileBtn.setAttribute('aria-label','Activar avisos');
+    mobileBtn.onclick=enableNotifications;
     topActions.insertBefore(mobileBtn,topActions.firstChild);
 
     const style=document.createElement('style');
     style.textContent=`
       #requestNotificationsMobile{display:none;border:1px solid var(--line);padding:8px 10px;white-space:nowrap}
+      #requestNotificationsMobile[data-active="true"]{border-color:#1d765d;color:#7ff0c5}
       @media(max-width:900px){#requestNotificationsMobile{display:inline-flex;align-items:center;justify-content:center}}
       @media(max-width:560px){#requestNotificationsMobile{font-size:.76rem;padding:7px 8px}.top-actions{gap:5px}}
     `;
     document.head.appendChild(style);
   }
 
-  // Corrige también la publicación de la alarma real sin depender de iconos.
-  const originalShowAlarm=window.showAlarm;
-  // showAlarm está declarado con function en app.js y es accesible globalmente en script clásico.
-  if(typeof showAlarm==='function'){
-    const baseShowAlarm=showAlarm;
-    window.showAlarm=async function(t){
-      await baseShowAlarm(t);
-      try{
-        if(Notification.permission==='granted'){
-          const reg=await getReadyRegistration();
-          await reg.showNotification(t.title||'Mi Día',{
-            body:t.notes||'Es hora de esta función.',
-            tag:'task-'+t.id,
-            requireInteraction:true
-          });
-        }
-      }catch(err){
-        console.error('Mi Día alarm notification:',err);
-      }
-    };
-  }
+  updateAvisosButton();
 
+  // No crea una segunda notificación para la alarma real.
   ['#alarmDone','#alarmSnooze'].forEach(sel=>{
     document.querySelector(sel)?.addEventListener('click',()=>{
       try{navigator.vibrate?.(0)}catch{}
@@ -260,9 +205,14 @@
   });
 
   document.addEventListener('visibilitychange',()=>{
-    if(!document.hidden && audioCtx?.state==='suspended')audioCtx.resume().catch(()=>{});
+    if(!document.hidden){
+      if(audioCtx?.state==='suspended')audioCtx.resume().catch(()=>{});
+      updateAvisosButton();
+    }
   });
+
   window.addEventListener('focus',()=>{
     if(audioCtx?.state==='suspended')audioCtx.resume().catch(()=>{});
+    updateAvisosButton();
   });
 })();
