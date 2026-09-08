@@ -200,6 +200,28 @@
     },{capture:true});
   });
 
+  // Acceso visible a "Activar avisos" en móvil.
+  const topActions=document.querySelector('.top-actions');
+  if(topActions && !document.querySelector('#requestNotificationsMobile')){
+    const mobileBtn=document.createElement('button');
+    mobileBtn.id='requestNotificationsMobile';
+    mobileBtn.type='button';
+    mobileBtn.className='ghost';
+    mobileBtn.textContent='🔔 Avisos';
+    mobileBtn.setAttribute('aria-label','Activar avisos');
+    mobileBtn.title='Activar avisos';
+    mobileBtn.onclick=()=>activate?.click();
+    topActions.insertBefore(mobileBtn,topActions.firstChild);
+
+    const style=document.createElement('style');
+    style.textContent=`
+      #requestNotificationsMobile{display:none;border:1px solid var(--line);padding:8px 10px;white-space:nowrap}
+      @media(max-width:900px){#requestNotificationsMobile{display:inline-flex;align-items:center;justify-content:center}}
+      @media(max-width:560px){#requestNotificationsMobile{font-size:.76rem;padding:7px 8px}.top-actions{gap:5px}}
+    `;
+    document.head.appendChild(style);
+  }
+
   document.addEventListener('visibilitychange',()=>{
     if(!document.hidden && audioCtx?.state==='suspended'){
       audioCtx.resume().catch(()=>{});
