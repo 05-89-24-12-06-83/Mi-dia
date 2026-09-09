@@ -84,6 +84,22 @@
     }
   };
 
+
+  // Vista previa corta: al elegir un tono, lo reproduce una sola vez.
+  async function previewSelectedMelody(type='soft-bell',volume=70){
+    try{
+      const ctx=ensureAudio();
+      if(!ctx)return false;
+      if(ctx.state==='suspended')await ctx.resume();
+      if(ctx.state!=='running')return false;
+      const v=Math.max(0,Math.min(100,Number(volume)))/100*.34;
+      playPass(ctx,type,v,ctx.currentTime+.02);
+      return true;
+    }catch{
+      return false;
+    }
+  }
+
   window.vibrateWith=function(pattern='standard'){
     try{
       if(!('vibrate' in navigator))return false;
@@ -156,6 +172,35 @@
         document.querySelector('#volume')?.value
       );
     };
+  }
+
+
+  // Al elegir una melodía en Android, se escucha automáticamente al cerrar el selector.
+  const soundTypeSelect=document.querySelector('#soundType');
+  if(soundTypeSelect){
+    soundTypeSelect.addEventListener('change',async()=>{
+      const soundEnabled=document.querySelector('#sound');
+      if(soundEnabled && !soundEnabled.checked)return;
+      await unlockAudio();
+      await previewSelectedMelody(
+        soundTypeSelect.value,
+        document.querySelector('#volume')?.value
+      );
+    });
+  }
+
+  // Si se cambia el volumen, hace una vista previa corta al terminar de moverlo.
+  const volumeControl=document.querySelector('#volume');
+  if(volumeControl){
+    volumeControl.addEventListener('change',async()=>{
+      const soundEnabled=document.querySelector('#sound');
+      if(soundEnabled && !soundEnabled.checked)return;
+      await unlockAudio();
+      await previewSelectedMelody(
+        document.querySelector('#soundType')?.value,
+        volumeControl.value
+      );
+    });
   }
 
   const previewVibration=document.querySelector('#previewVibration');

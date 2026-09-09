@@ -1,4 +1,4 @@
-const CACHE='mi-dia-v1.4f-vibracion-android';
+const CACHE='mi-dia-v1.4g-preview-tonos';
 const ASSETS=['./','index.html','styles.css','app.js','alarm-fix.js','manifest.webmanifest','Icons/icon.svg','Icons/icon-192.png','Icons/icon-512.png'];
 
 self.addEventListener('install',event=>{
