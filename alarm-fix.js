@@ -906,9 +906,22 @@
   }
 
   function applyThemeChoice(mode){
+    const valid=['system','light','dark'];
+    if(!valid.includes(mode))mode='system';
     const sel=document.querySelector('#themeMode');
-    if(sel){sel.value=mode;sel.dispatchEvent(new Event('change',{bubbles:true}))}
-    else{document.documentElement.dataset.theme=mode;localStorage.setItem('midia.theme',mode)}
+    if(sel)sel.value=mode;
+    // Cambio directo y persistente; no depende de que el select oculto dispare un evento.
+    if(typeof applyTheme==='function'){
+      try{applyTheme(mode)}catch{}
+    }else{
+      document.documentElement.dataset.theme=mode;
+      localStorage.setItem('midia.theme',mode);
+      const prefersDark=window.matchMedia?.('(prefers-color-scheme: dark)').matches;
+      const effective=mode==='system'?(prefersDark?'dark':'light'):mode;
+      document.querySelector('meta[name="theme-color"]')?.setAttribute('content',effective==='light'?'#eaf6ff':'#06111b');
+    }
+    localStorage.setItem('midia.theme',mode);
+    document.documentElement.dataset.theme=mode;
     document.querySelectorAll('[data-midia-theme]').forEach(b=>b.classList.toggle('active',b.dataset.midiaTheme===mode));
   }
   function renderMore(){
@@ -919,7 +932,7 @@
       <div class="midia-more-section" id="midiaAppearanceSection"><span class="midia-mini-label">Apariencia</span><div class="midia-theme-segment"><button type="button" data-midia-theme="system">Sistema</button><button type="button" data-midia-theme="light">Claro</button><button type="button" data-midia-theme="dark">Oscuro</button></div></div>
       <button id="midiaMoreAlerts" class="midia-more-row" type="button"><span>🔔</span><div><strong>Centro de avisos</strong><small>Sonido, vibración y recordatorios</small></div></button>
       <button id="midiaMoreUpdate" class="midia-more-row" type="button"><span>↻</span><div><strong>Actualizar Mi Día</strong><small>Buscar la versión más reciente</small></div></button>
-      <div class="midia-version">Mi Día v1.4o · Navegación funcional</div>`;
+      <div class="midia-version">Mi Día v1.4p · Navegación y tema corregidos</div>`;
     body.querySelectorAll('[data-midia-theme]').forEach(b=>{b.classList.toggle('active',b.dataset.midiaTheme===current);b.onclick=()=>applyThemeChoice(b.dataset.midiaTheme)});
     body.querySelector('#midiaMoreNew').onclick=()=>{dlg.close();document.querySelector('#newBtn')?.click()};
     body.querySelector('#midiaMoreAlerts').onclick=()=>{dlg.close();openCenter()};
@@ -938,16 +951,18 @@
     if(bell)topActions.insertBefore(themeBtn,bell);else topActions.insertBefore(themeBtn,topActions.firstChild);
   }
 
-  document.querySelectorAll('.mobile-dock button').forEach(btn=>{
-    btn.addEventListener('click',()=>{
-      const action=btn.dataset.dock;setDockActive(action);
-      if(action==='programmed'){const d=renderProgrammed();if(!d.open)d.showModal()}
-      if(action==='calendar'){const d=renderCalendarOverview();if(!d.open)d.showModal()}
-      if(action==='alarms')openCenter();
-      if(action==='goals'){const d=renderGoals();if(!d.open)d.showModal()}
-      if(action==='more'){const d=renderMore();if(!d.open)d.showModal()}
-    });
-  });
+  // Delegación: funciona aunque la barra inferior se pinte después de cargar el script.
+  document.addEventListener('click',e=>{
+    const btn=e.target.closest?.('.mobile-dock button[data-dock]');
+    if(!btn)return;
+    const action=btn.dataset.dock;
+    setDockActive(action);
+    if(action==='programmed'){const d=renderProgrammed();if(!d.open)d.showModal();return}
+    if(action==='calendar'){const d=renderCalendarOverview();if(!d.open)d.showModal();return}
+    if(action==='alarms'){openCenter();return}
+    if(action==='goals'){const d=renderGoals();if(!d.open)d.showModal();return}
+    if(action==='more'){const d=renderMore();if(!d.open)d.showModal();return}
+  },{passive:false});
 
   syncTimeLabelV14();
   syncSoundLabelV14();
