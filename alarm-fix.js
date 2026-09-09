@@ -162,6 +162,15 @@
   if(previewVibration){
     previewVibration.onclick=async()=>{
       const pattern=document.querySelector('#vibrationPattern')?.value||'standard';
+
+      if(typeof window.MiDiaAndroid!=='undefined'
+          && typeof window.MiDiaAndroid.previewVibration==='function'){
+        try{
+          window.MiDiaAndroid.previewVibration(pattern);
+          return;
+        }catch{}
+      }
+
       window.vibrateWith(pattern);
 
       const sent=await androidVibrationNotification({
@@ -173,8 +182,8 @@
         autoClose:true
       });
 
-      if(!sent){
-        alert('Android no permitió ejecutar la prueba de vibración mediante notificación.');
+      if(!sent && !('vibrate' in navigator)){
+        alert('Este dispositivo no permite ejecutar la vibración de prueba.');
       }
     };
   }
@@ -218,6 +227,15 @@
   }
 
   function permissionText(){
+    if(nativeBridgeAvailable()){
+      try{
+        return window.MiDiaAndroid.notificationsEnabled()
+          ? ['Android: activas','good']
+          : ['Android: revisar','warn'];
+      }catch{
+        return ['Android','good'];
+      }
+    }
     if(!('Notification' in window))return ['No compatible','bad'];
     if(Notification.permission==='granted')return ['Activas','good'];
     if(Notification.permission==='denied')return ['Bloqueadas','bad'];
@@ -404,6 +422,17 @@
 
   async function enableNotifications(){
     await unlockAudio();
+
+    if(nativeBridgeAvailable()){
+      try{
+        window.MiDiaAndroid.requestNotificationPermission();
+        renderCenter();
+        return true;
+      }catch{
+        return false;
+      }
+    }
+
     if(!('Notification' in window)){
       return false;
     }
@@ -424,7 +453,9 @@
   }
 
   async function openCenter(){
-    if('Notification' in window && Notification.permission==='default'){
+    if(!nativeBridgeAvailable()
+        && 'Notification' in window
+        && Notification.permission==='default'){
       await enableNotifications();
     }
     const dlg=ensureCenterDialog();
@@ -469,6 +500,11 @@
 
   if(typeof showAlarm==='function'){
     showAlarm=async function(t){
+      if(nativeBridgeAvailable()){
+        syncNativeAlarms();
+        return;
+      }
+
       activeAlarmId=t.id;
       $('#alarmTitle').textContent=t.title;
       $('#alarmNote').textContent=t.notes||'Tienes una función programada.';
