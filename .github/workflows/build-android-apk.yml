@@ -5,7 +5,7 @@ on:
   push:
     branches: [ main ]
     paths:
-      - 'MiDia-Android-A1.zip'
+      - 'MiDia-Android-A1*.zip'
       - '.github/workflows/build-android-apk.yml'
 
 permissions:
@@ -21,9 +21,12 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Extraer proyecto Android
+        shell: bash
         run: |
+          ZIP_FILE="$(ls -t MiDia-Android-A1*.zip | head -1)"
+          echo "Usando: $ZIP_FILE"
           rm -rf MiDia-Android-A1
-          unzip -q MiDia-Android-A1.zip
+          unzip -q "$ZIP_FILE"
           test -f MiDia-Android-A1/app/build.gradle
 
       - name: Java 17
@@ -52,7 +55,7 @@ jobs:
       - name: Publicar APK
         uses: actions/upload-artifact@v4
         with:
-          name: MiDia-v1.4-A1-debug
+          name: MiDia-v1.4-A2-debug
           path: MiDia-Android-A1/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
