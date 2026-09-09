@@ -2,13 +2,21 @@
   const AC=window.AudioContext||window.webkitAudioContext;
   let audioCtx=null;
 
-  const PATTERNS={
-    standard:[400,150,400],
-    short:[300],
-    double:[350,120,350],
-    triple:[250,100,250,100,250],
-    long:[1000],
-    alarm:[500,150,500,150,800]
+  const DIRECT_PATTERNS={
+    standard:[500,150,500],
+    short:[350],
+    double:[500,140,500],
+    triple:[420,120,420,120,420],
+    long:[1200],
+    alarm:[700,160,700,160,1000]
+  };
+
+  const NOTIFICATION_PATTERNS={
+    standard:[800,180,800],
+    short:[500],
+    double:[700,180,700],
+    triple:[600,180,600,180,600],
+    long:[1500]
   };
 
   function ensureAudio(){
@@ -60,7 +68,6 @@
     tone(ctx,880,t,.45,v,'sine');tone(ctx,1320,t+.12,.7,v*.6,'sine');return .9
   }
 
-  // Doble sonido aprobado.
   window.playMelody=async function(type='soft-bell',volume=70){
     try{
       const ctx=ensureAudio();
@@ -80,21 +87,65 @@
   window.vibrateWith=function(pattern='standard'){
     try{
       if(!('vibrate' in navigator))return false;
-      const seq=PATTERNS[pattern]||PATTERNS.standard;
       navigator.vibrate(0);
-      setTimeout(()=>navigator.vibrate(seq),40);
-      return true;
+      return navigator.vibrate(DIRECT_PATTERNS[pattern]||DIRECT_PATTERNS.standard);
     }catch{
       return false;
     }
   };
 
-  const prime=()=>{unlockAudio()};
+  async function readyRegistration(){
+    if(!('serviceWorker' in navigator))throw new Error('Service Worker no disponible');
+    let reg=await navigator.serviceWorker.getRegistration();
+    if(!reg)reg=await navigator.serviceWorker.register('sw.js',{updateViaCache:'none'});
+    return await navigator.serviceWorker.ready;
+  }
+
+  async function androidVibrationNotification({
+    title='Mi Día',
+    body='Recordatorio',
+    pattern='standard',
+    tag='mi-dia-vibration',
+    requireInteraction=true,
+    autoClose=false
+  }={}){
+    if(!('Notification' in window))return false;
+    if(Notification.permission!=='granted')return false;
+
+    try{
+      const reg=await readyRegistration();
+      await reg.showNotification(title,{
+        body,
+        icon:'Icons/icon-192.png',
+        badge:'Icons/icon-192.png',
+        tag,
+        renotify:true,
+        requireInteraction,
+        silent:false,
+        vibrate:NOTIFICATION_PATTERNS[pattern]||NOTIFICATION_PATTERNS.standard,
+        timestamp:Date.now()
+      });
+
+      if(autoClose){
+        setTimeout(async()=>{
+          try{
+            const notes=await reg.getNotifications({tag});
+            notes.forEach(n=>n.close());
+          }catch{}
+        },2500);
+      }
+      return true;
+    }catch(err){
+      console.error('Mi Día vibration notification:',err);
+      return false;
+    }
+  }
+
+  const prime=()=>unlockAudio();
   ['pointerdown','touchstart','keydown'].forEach(evt=>{
     document.addEventListener(evt,prime,{once:true,passive:true,capture:true});
   });
-
-  document.querySelector('#taskForm')?.addEventListener('submit',()=>{unlockAudio()},{capture:true});
+  document.querySelector('#taskForm')?.addEventListener('submit',unlockAudio,{capture:true});
 
   const previewSound=document.querySelector('#previewSound');
   if(previewSound){
@@ -109,67 +160,51 @@
 
   const previewVibration=document.querySelector('#previewVibration');
   if(previewVibration){
-    previewVibration.onclick=()=>{
-      window.vibrateWith(document.querySelector('#vibrationPattern')?.value);
-    };
-  }
+    previewVibration.onclick=async()=>{
+      const pattern=document.querySelector('#vibrationPattern')?.value||'standard';
+      window.vibrateWith(pattern);
 
-  const alarmDialog=document.querySelector('#alarmDialog');
-  if(alarmDialog){
-    const observer=new MutationObserver(()=>{
-      if(alarmDialog.open)window.vibrateWith('alarm');
-      else{try{navigator.vibrate?.(0)}catch{}}
-    });
-    observer.observe(alarmDialog,{attributes:true,attributeFilter:['open']});
+      const sent=await androidVibrationNotification({
+        title:'Mi Día',
+        body:'Prueba de vibración',
+        pattern,
+        tag:'mi-dia-vibration-test',
+        requireInteraction:false,
+        autoClose:true
+      });
+
+      if(!sent){
+        alert('Android no permitió ejecutar la prueba de vibración mediante notificación.');
+      }
+    };
   }
 
   function updateAvisosButton(){
     const mobile=document.querySelector('#requestNotificationsMobile');
     if(!mobile)return;
-    if('Notification' in window && Notification.permission==='granted'){
-      mobile.textContent='🔔 Activos';
-      mobile.title='Notificaciones activas';
-      mobile.dataset.active='true';
-    }else{
-      mobile.textContent='🔔 Avisos';
-      mobile.title='Activar avisos';
-      mobile.dataset.active='false';
-    }
+    const active='Notification' in window && Notification.permission==='granted';
+    mobile.textContent=active?'🔔 Activos':'🔔 Avisos';
+    mobile.dataset.active=active?'true':'false';
   }
 
   async function enableNotifications(){
     await unlockAudio();
-
     if(!('Notification' in window)){
       alert('Este dispositivo no admite notificaciones web.');
       return false;
     }
-
-    // Si ya están activas, no genera otra notificación ni mensaje de prueba.
     if(Notification.permission==='granted'){
-      localStorage.setItem('midia.notifications.enabled','1');
-      if(typeof updateNotifStatus==='function')updateNotifStatus();
       updateAvisosButton();
       return true;
     }
-
     if(Notification.permission==='denied'){
-      alert('Las notificaciones están bloqueadas en Android. Actívalas desde Ajustes > Mi Día > Notificaciones.');
-      updateAvisosButton();
+      alert('Activa las notificaciones desde Ajustes > Mi Día > Notificaciones.');
       return false;
     }
-
-    const permission=await Notification.requestPermission();
+    await Notification.requestPermission();
     if(typeof updateNotifStatus==='function')updateNotifStatus();
-
-    if(permission==='granted'){
-      localStorage.setItem('midia.notifications.enabled','1');
-      updateAvisosButton();
-      return true;
-    }
-
     updateAvisosButton();
-    return false;
+    return Notification.permission==='granted';
   }
 
   const activate=document.querySelector('#requestNotifications');
@@ -181,7 +216,6 @@
     mobileBtn.id='requestNotificationsMobile';
     mobileBtn.type='button';
     mobileBtn.className='ghost';
-    mobileBtn.setAttribute('aria-label','Activar avisos');
     mobileBtn.onclick=enableNotifications;
     topActions.insertBefore(mobileBtn,topActions.firstChild);
 
@@ -194,10 +228,54 @@
     `;
     document.head.appendChild(style);
   }
-
   updateAvisosButton();
 
-  // No crea una segunda notificación para la alarma real.
+  if(typeof showAlarm==='function'){
+    showAlarm=async function(t){
+      activeAlarmId=t.id;
+      $('#alarmTitle').textContent=t.title;
+      $('#alarmNote').textContent=t.notes||'Tienes una función programada.';
+      $('#alarmSoundState').textContent=t.sound?`🔊 ${soundName(t.soundType)} · ${t.volume}%`:'🔕 Sin sonido';
+      $('#alarmVibrationState').textContent=t.vibrate?`📳 Vibración: ${t.vibrationPattern}`:'📴 Sin vibración';
+
+      if(!alarmDialog.open)alarmDialog.showModal();
+
+      if(t.sound){
+        await window.playMelody(t.soundType,t.volume);
+        if(alarmTimer)clearInterval(alarmTimer);
+        alarmTimer=setInterval(()=>window.playMelody(t.soundType,t.volume),5000);
+      }
+
+      if(t.vibrate){
+        window.vibrateWith(t.vibrationPattern);
+      }
+
+      if(Notification.permission==='granted'){
+        try{
+          const reg=await readyRegistration();
+          const options={
+            body:t.notes||'Es hora de esta función.',
+            icon:'Icons/icon-192.png',
+            badge:'Icons/icon-192.png',
+            tag:`mi-dia-task-${t.id}`,
+            renotify:true,
+            requireInteraction:true,
+            silent:false,
+            timestamp:Date.now()
+          };
+
+          if(t.vibrate){
+            options.vibrate=NOTIFICATION_PATTERNS[t.vibrationPattern]||NOTIFICATION_PATTERNS.standard;
+          }
+
+          await reg.showNotification(t.title||'Mi Día',options);
+        }catch(err){
+          console.error('Mi Día alarm notification:',err);
+        }
+      }
+    };
+  }
+
   ['#alarmDone','#alarmSnooze'].forEach(sel=>{
     document.querySelector(sel)?.addEventListener('click',()=>{
       try{navigator.vibrate?.(0)}catch{}
