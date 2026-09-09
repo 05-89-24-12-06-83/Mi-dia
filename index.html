@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#123453" />
+  <meta name="theme-color" content="#06111b" />
   <meta name="description" content="Mi Día: agenda sencilla con alarmas y recordatorios." />
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="Icons/icon.svg" type="image/svg+xml" />
@@ -16,7 +16,7 @@
     <header class="topbar">
       <div class="brand">
         <img src="Icons/icon.svg" alt="Mi Día" class="logo" />
-        <div><strong>Mi <em>Día</em></strong><span>Organiza hoy un mejor mañana</span></div>
+        <div><strong>Mi <em>Día</em></strong><span>Organiza · Planifica · Logra</span></div>
       </div>
       <div class="top-actions"><button id="updateBtn" class="ghost update-btn" hidden>Actualizar</button><select id="themeMode" class="theme-select" aria-label="Apariencia"><option value="system">Sistema</option><option value="light">Claro</option><option value="dark">Oscuro</option></select><span id="notifStatus" class="status-pill">Avisos: sin activar</span><button id="installBtn" class="ghost" hidden>Instalar app</button></div>
     </header>
@@ -75,7 +75,12 @@
       <label>Título de la tarea<input id="title" required maxlength="80" placeholder="Ej. Llamar al proveedor" /></label>
       <div class="two">
         <label>Fecha<input id="date" type="date" required /></label>
-        <label>Hora<input id="time" type="time" required step="60" /></label>
+        <label>Hora
+          <input id="time" type="hidden" />
+          <button id="timePickerButton" type="button" class="picker-trigger" aria-haspopup="dialog">
+            <span>Seleccionar hora</span><strong id="timePickerValue">--:--</strong>
+          </button>
+        </label>
       </div>
       <div class="two">
         <label>Captura de tiempo<select id="step"><option value="1">Minuto a minuto</option><option value="15" selected>Intervalos de 15 min</option></select></label>
@@ -105,7 +110,7 @@
       <div class="sound-card">
         <div class="switch-row"><span>Sonido en este evento</span><input id="sound" type="checkbox" checked /></div>
         <label>Tipo de melodía
-          <select id="soundType">
+          <select id="soundType" class="native-shadow-control" aria-hidden="true" tabindex="-1">
             <option value="soft-bell">Campana suave</option>
             <option value="classic">Tono clásico</option>
             <option value="digital">Alarma digital</option>
@@ -115,6 +120,9 @@
             <option value="modern">Notificación moderna</option>
             <option value="friendly">Recordatorio amable</option>
           </select>
+          <button id="soundPickerButton" type="button" class="picker-trigger melody-trigger" aria-haspopup="dialog">
+            <span>Melodía</span><strong id="soundPickerValue">Campana suave</strong>
+          </button>
         </label>
         <div class="volume-row"><label for="volume">Volumen de esta alarma</label><output id="volumeValue">70%</output></div>
         <input id="volume" type="range" min="0" max="100" value="70" step="5" />
@@ -138,10 +146,50 @@
     </form>
   </dialog>
 
+
+  <dialog id="timePickerDialog" class="blue-picker-dialog">
+    <div class="blue-picker-panel">
+      <div class="blue-picker-head">
+        <button type="button" class="picker-close" data-close-picker="time">×</button>
+        <strong>Seleccionar hora</strong>
+        <span></span>
+      </div>
+      <div class="time-wheel-wrap">
+        <div>
+          <span class="picker-column-label">Hora</span>
+          <div id="hourWheel" class="time-wheel" role="listbox" aria-label="Hora"></div>
+        </div>
+        <div class="time-separator">:</div>
+        <div>
+          <span class="picker-column-label">Minuto</span>
+          <div id="minuteWheel" class="time-wheel" role="listbox" aria-label="Minuto"></div>
+        </div>
+      </div>
+      <button id="acceptTimePicker" class="primary picker-accept" type="button">Aceptar</button>
+    </div>
+  </dialog>
+
+  <dialog id="melodyPickerDialog" class="blue-picker-dialog">
+    <div class="blue-picker-panel melody-panel">
+      <div class="blue-picker-head">
+        <button type="button" class="picker-close" data-close-picker="melody">×</button>
+        <strong>Seleccionar melodía</strong>
+        <span></span>
+      </div>
+      <div id="melodyPickerList" class="melody-picker-list"></div>
+      <div class="picker-preview-row">
+        <span>Vista previa</span>
+        <button id="pickerPreviewSound" class="round-play" type="button">▶</button>
+      </div>
+      <button id="acceptMelodyPicker" class="primary picker-accept" type="button">Aceptar</button>
+    </div>
+  </dialog>
+
   <dialog id="alarmDialog" class="alarm-dialog">
     <div class="alarm-panel">
       <img src="Icons/icon.svg" alt="Mi Día" class="alarm-logo" />
       <span class="eyebrow">RECORDATORIO</span>
+      <div id="alarmTime" class="alarm-time-display">--:--</div>
       <h2 id="alarmTitle">Es hora</h2>
       <p id="alarmNote">Tienes una función programada.</p>
       <div id="alarmSoundState" class="alarm-state">🔊 Con sonido</div><div id="alarmVibrationState" class="alarm-state">📳 Vibración activa</div>
@@ -163,5 +211,14 @@
 
   <script src="app.js"></script>
   <script src="alarm-fix.js"></script>
+
+  <nav class="mobile-dock" aria-label="Navegación rápida">
+    <button type="button" data-dock="home" class="active"><span>⌂</span>Inicio</button>
+    <button type="button" data-dock="calendar"><span>▣</span>Calendario</button>
+    <button type="button" data-dock="alarms"><span>♢</span>Alarmas</button>
+    <button type="button" data-dock="next"><span>✓</span>Metas</button>
+    <button type="button" data-dock="new"><span>＋</span>Más</button>
+  </nav>
+
 </body>
 </html>

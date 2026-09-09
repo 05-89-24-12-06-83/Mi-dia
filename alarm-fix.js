@@ -506,6 +506,11 @@
       }
 
       activeAlarmId=t.id;
+      const alarmTimeEl=document.querySelector('#alarmTime');
+      if(alarmTimeEl){
+        const d=new Date(t.when);
+        alarmTimeEl.textContent=Number.isNaN(d.getTime())?'--:--':d.toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'});
+      }
       $('#alarmTitle').textContent=t.title;
       $('#alarmNote').textContent=t.notes||'Tienes una función programada.';
       $('#alarmSoundState').textContent=t.sound?`🔊 ${soundName(t.soundType)} · ${t.volume}%`:'🔕 Sin sonido';
@@ -622,4 +627,172 @@
     syncNativeAlarms();
     renderCenter();
   });
+
+  // --- v1.4k: selectores azules propios, basados en la muestra aprobada ---
+  const MELODY_LABELS={
+    'soft-bell':'Campana suave',
+    'classic':'Tono clásico',
+    'digital':'Alarma digital',
+    'piano':'Piano',
+    'nature':'Naturaleza',
+    'sea':'Mar',
+    'modern':'Notificación moderna',
+    'friendly':'Recordatorio amable'
+  };
+
+  const timeDialogV14=document.querySelector('#timePickerDialog');
+  const melodyDialogV14=document.querySelector('#melodyPickerDialog');
+  const timeInputV14=document.querySelector('#time');
+  const soundSelectV14=document.querySelector('#soundType');
+  const timeValueV14=document.querySelector('#timePickerValue');
+  const soundValueV14=document.querySelector('#soundPickerValue');
+
+  let tempHourV14='09';
+  let tempMinuteV14='00';
+  let tempMelodyV14='soft-bell';
+
+  function syncTimeLabelV14(){
+    if(timeValueV14)timeValueV14.textContent=timeInputV14?.value||'--:--';
+  }
+
+  function syncSoundLabelV14(){
+    if(soundValueV14)soundValueV14.textContent=MELODY_LABELS[soundSelectV14?.value]||'Campana suave';
+    const trigger=document.querySelector('#soundPickerButton');
+    if(trigger)trigger.disabled=!document.querySelector('#sound')?.checked;
+  }
+
+  function makeWheelV14(container,values,current,onPick){
+    if(!container)return;
+    container.innerHTML='';
+    values.forEach(value=>{
+      const b=document.createElement('button');
+      b.type='button';
+      b.textContent=value;
+      b.dataset.value=value;
+      if(value===current)b.classList.add('selected');
+      b.onclick=()=>{
+        [...container.querySelectorAll('button')].forEach(x=>x.classList.remove('selected'));
+        b.classList.add('selected');
+        onPick(value);
+        b.scrollIntoView({block:'center',behavior:'smooth'});
+      };
+      container.appendChild(b);
+    });
+    setTimeout(()=>container.querySelector('.selected')?.scrollIntoView({block:'center'}),40);
+  }
+
+  function openTimePickerV14(){
+    const [h,m]=(timeInputV14?.value||'09:00').split(':');
+    tempHourV14=h||'09';
+    tempMinuteV14=m||'00';
+
+    const hourValues=Array.from({length:24},(_,i)=>String(i).padStart(2,'0'));
+    const step=document.querySelector('#step')?.value==='15'?15:1;
+    const minuteValues=Array.from({length:Math.ceil(60/step)},(_,i)=>String(i*step).padStart(2,'0'));
+
+    if(!minuteValues.includes(tempMinuteV14)){
+      const rounded=Math.min(59,Math.round(Number(tempMinuteV14||0)/step)*step);
+      tempMinuteV14=String(rounded>=60?45:rounded).padStart(2,'0');
+    }
+
+    makeWheelV14(document.querySelector('#hourWheel'),hourValues,tempHourV14,v=>tempHourV14=v);
+    makeWheelV14(document.querySelector('#minuteWheel'),minuteValues,tempMinuteV14,v=>tempMinuteV14=v);
+
+    if(timeDialogV14 && !timeDialogV14.open)timeDialogV14.showModal();
+  }
+
+  function renderMelodiesV14(){
+    const list=document.querySelector('#melodyPickerList');
+    if(!list)return;
+    list.innerHTML='';
+    Object.entries(MELODY_LABELS).forEach(([value,label])=>{
+      const row=document.createElement('button');
+      row.type='button';
+      row.className='melody-option'+(value===tempMelodyV14?' selected':'');
+      row.innerHTML=`<span class="play-dot">▶</span><span>${label}</span><span class="radio-dot"></span>`;
+      row.onclick=async()=>{
+        tempMelodyV14=value;
+        renderMelodiesV14();
+        await unlockAudio();
+        await window.playMelody(value,document.querySelector('#volume')?.value||70);
+      };
+      list.appendChild(row);
+    });
+  }
+
+  function openMelodyPickerV14(){
+    tempMelodyV14=soundSelectV14?.value||'soft-bell';
+    renderMelodiesV14();
+    if(melodyDialogV14 && !melodyDialogV14.open)melodyDialogV14.showModal();
+  }
+
+  document.querySelector('#timePickerButton')?.addEventListener('click',openTimePickerV14);
+  document.querySelector('#soundPickerButton')?.addEventListener('click',openMelodyPickerV14);
+
+  document.querySelector('#acceptTimePicker')?.addEventListener('click',()=>{
+    if(timeInputV14){
+      timeInputV14.value=`${tempHourV14}:${tempMinuteV14}`;
+      timeInputV14.dispatchEvent(new Event('change',{bubbles:true}));
+    }
+    syncTimeLabelV14();
+    timeDialogV14?.close();
+  });
+
+  document.querySelector('#acceptMelodyPicker')?.addEventListener('click',()=>{
+    if(soundSelectV14){
+      soundSelectV14.value=tempMelodyV14;
+      soundSelectV14.dispatchEvent(new Event('change',{bubbles:true}));
+    }
+    syncSoundLabelV14();
+    melodyDialogV14?.close();
+  });
+
+  document.querySelector('#pickerPreviewSound')?.addEventListener('click',async()=>{
+    await unlockAudio();
+    await window.playMelody(tempMelodyV14,document.querySelector('#volume')?.value||70);
+  });
+
+  document.querySelectorAll('[data-close-picker]').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      if(btn.dataset.closePicker==='time')timeDialogV14?.close();
+      if(btn.dataset.closePicker==='melody')melodyDialogV14?.close();
+    });
+  });
+
+  [timeDialogV14,melodyDialogV14].forEach(dlg=>{
+    dlg?.addEventListener('click',e=>{
+      if(e.target===dlg)dlg.close();
+    });
+  });
+
+  document.querySelector('#step')?.addEventListener('change',()=>setTimeout(syncTimeLabelV14,0));
+  document.querySelector('#sound')?.addEventListener('change',syncSoundLabelV14);
+  document.querySelector('#soundType')?.addEventListener('change',syncSoundLabelV14);
+
+  ['#newBtn','#goNew'].forEach(sel=>{
+    document.querySelector(sel)?.addEventListener('click',()=>{
+      setTimeout(()=>{
+        syncTimeLabelV14();
+        syncSoundLabelV14();
+      },0);
+    });
+  });
+
+  // Navegación móvil de la muestra, reutilizando funciones existentes.
+  document.querySelectorAll('.mobile-dock button').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      document.querySelectorAll('.mobile-dock button').forEach(x=>x.classList.remove('active'));
+      btn.classList.add('active');
+      const action=btn.dataset.dock;
+      if(action==='home')window.scrollTo({top:0,behavior:'smooth'});
+      if(action==='calendar')document.querySelector('.timeline-card')?.scrollIntoView({behavior:'smooth',block:'start'});
+      if(action==='alarms')openCenter();
+      if(action==='next')document.querySelector('.next-card')?.scrollIntoView({behavior:'smooth',block:'start'});
+      if(action==='new')document.querySelector('#newBtn')?.click();
+    });
+  });
+
+  syncTimeLabelV14();
+  syncSoundLabelV14();
+
 })();
