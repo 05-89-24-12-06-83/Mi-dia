@@ -489,29 +489,8 @@
         window.vibrateWith(t.vibrationPattern);
       }
 
-      if(Notification.permission==='granted'){
-        try{
-          const reg=await readyRegistration();
-          const options={
-            body:t.notes||'Es hora de esta función.',
-            icon:'Icons/icon-192.png',
-            badge:'Icons/icon-192.png',
-            tag:`mi-dia-task-${t.id}`,
-            renotify:true,
-            requireInteraction:true,
-            silent:quiet || !t.sound,
-            timestamp:Date.now()
-          };
-
-          if(t.vibrate && !quiet){
-            options.vibrate=NOTIFICATION_PATTERNS[t.vibrationPattern]||NOTIFICATION_PATTERNS.standard;
-          }
-
-          await reg.showNotification(t.title||'Mi Día',options);
-        }catch(err){
-          console.error('Mi Día alarm notification:',err);
-        }
-      }
+      // La alarma real NO publica una notificación en el panel de Android.
+      // El Centro de avisos (campana) conserva los recordatorios desde localStorage.
     };
   }
 
@@ -520,6 +499,79 @@
       try{navigator.vibrate?.(0)}catch{}
     },{capture:true});
   });
+
+
+  // --- Puente opcional Mi Día Android ---
+  // En navegador/PWA no hace nada. En la app Android sincroniza las tareas
+  // con AlarmManager para que puedan sonar con la pantalla bloqueada o la app cerrada.
+  function nativeBridgeAvailable(){
+    return typeof window.MiDiaAndroid!=='undefined'
+      && typeof window.MiDiaAndroid.syncAlarms==='function';
+  }
+
+  function syncNativeAlarms(){
+    if(!nativeBridgeAvailable())return false;
+    try{
+      window.MiDiaAndroid.syncAlarms(localStorage.getItem('midia.tasks')||'[]');
+      return true;
+    }catch(err){
+      console.error('Mi Día native sync:',err);
+      return false;
+    }
+  }
+
+  function consumeNativeActions(){
+    if(!nativeBridgeAvailable() || typeof window.MiDiaAndroid.consumeActions!=='function')return;
+    try{
+      const raw=window.MiDiaAndroid.consumeActions();
+      if(!raw)return;
+      const actions=JSON.parse(raw);
+      if(!Array.isArray(actions) || !actions.length)return;
+
+      let changed=false;
+      actions.forEach(a=>{
+        try{
+          if(typeof tasks==='undefined')return;
+          const t=tasks.find(x=>x.id===a.id);
+          if(!t)return;
+
+          if(a.action==='complete' && typeof completeTask==='function'){
+            completeTask(t);
+            changed=true;
+          }else if(a.action==='snooze' && typeof snoozeTask==='function'){
+            snoozeTask(t,5);
+            changed=true;
+          }
+        }catch{}
+      });
+
+      if(changed){
+        try{localStorage.setItem('midia.tasks',JSON.stringify(tasks))}catch{}
+        if(typeof render==='function')render();
+      }
+      syncNativeAlarms();
+    }catch(err){
+      console.error('Mi Día native actions:',err);
+    }
+  }
+
+  window.addEventListener('midia-native-ready',()=>{
+    consumeNativeActions();
+    syncNativeAlarms();
+    renderCenter();
+  });
+
+  // Cada cambio visible en la lista de próximos avisos fuerza una nueva sincronización nativa.
+  const nativeBadge=document.querySelector('#nextBadge');
+  if(nativeBadge){
+    new MutationObserver(()=>syncNativeAlarms())
+      .observe(nativeBadge,{childList:true,characterData:true,subtree:true});
+  }
+
+  setTimeout(()=>{
+    consumeNativeActions();
+    syncNativeAlarms();
+  },700);
 
   document.addEventListener('visibilitychange',()=>{
     if(!document.hidden){
@@ -530,6 +582,8 @@
 
   window.addEventListener('focus',()=>{
     if(audioCtx?.state==='suspended')audioCtx.resume().catch(()=>{});
+    consumeNativeActions();
+    syncNativeAlarms();
     renderCenter();
   });
 })();
