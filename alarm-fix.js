@@ -84,22 +84,6 @@
     }
   };
 
-
-  // Vista previa corta: al elegir un tono, lo reproduce una sola vez.
-  async function previewSelectedMelody(type='soft-bell',volume=70){
-    try{
-      const ctx=ensureAudio();
-      if(!ctx)return false;
-      if(ctx.state==='suspended')await ctx.resume();
-      if(ctx.state!=='running')return false;
-      const v=Math.max(0,Math.min(100,Number(volume)))/100*.34;
-      playPass(ctx,type,v,ctx.currentTime+.02);
-      return true;
-    }catch{
-      return false;
-    }
-  }
-
   window.vibrateWith=function(pattern='standard'){
     try{
       if(!('vibrate' in navigator))return false;
@@ -174,35 +158,6 @@
     };
   }
 
-
-  // Al elegir una melodía en Android, se escucha automáticamente al cerrar el selector.
-  const soundTypeSelect=document.querySelector('#soundType');
-  if(soundTypeSelect){
-    soundTypeSelect.addEventListener('change',async()=>{
-      const soundEnabled=document.querySelector('#sound');
-      if(soundEnabled && !soundEnabled.checked)return;
-      await unlockAudio();
-      await previewSelectedMelody(
-        soundTypeSelect.value,
-        document.querySelector('#volume')?.value
-      );
-    });
-  }
-
-  // Si se cambia el volumen, hace una vista previa corta al terminar de moverlo.
-  const volumeControl=document.querySelector('#volume');
-  if(volumeControl){
-    volumeControl.addEventListener('change',async()=>{
-      const soundEnabled=document.querySelector('#sound');
-      if(soundEnabled && !soundEnabled.checked)return;
-      await unlockAudio();
-      await previewSelectedMelody(
-        document.querySelector('#soundType')?.value,
-        volumeControl.value
-      );
-    });
-  }
-
   const previewVibration=document.querySelector('#previewVibration');
   if(previewVibration){
     previewVibration.onclick=async()=>{
@@ -224,36 +179,261 @@
     };
   }
 
-  function updateAvisosButton(){
+  function readCenterTasks(){
+    try{
+      const raw=JSON.parse(localStorage.getItem('midia.tasks')||'[]');
+      return Array.isArray(raw)?raw:[];
+    }catch{
+      return [];
+    }
+  }
+
+  function upcomingCenterTasks(){
+    const now=Date.now();
+    return readCenterTasks()
+      .filter(t=>!t.done && t.alarm!==false && new Date(t.when).getTime()>=now)
+      .sort((a,b)=>new Date(a.when)-new Date(b.when));
+  }
+
+  function getQuietUntil(){
+    const value=Number(localStorage.getItem('midia.quietUntil')||0);
+    return Number.isFinite(value)?value:0;
+  }
+
+  function isQuietMode(){
+    const until=getQuietUntil();
+    if(until && until<=Date.now()){
+      localStorage.removeItem('midia.quietUntil');
+      return false;
+    }
+    return until>Date.now();
+  }
+
+  function centerDate(value){
+    const d=new Date(value);
+    if(Number.isNaN(d.getTime()))return '';
+    return new Intl.DateTimeFormat('es-MX',{
+      weekday:'short',day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'
+    }).format(d);
+  }
+
+  function permissionText(){
+    if(!('Notification' in window))return ['No compatible','bad'];
+    if(Notification.permission==='granted')return ['Activas','good'];
+    if(Notification.permission==='denied')return ['Bloqueadas','bad'];
+    return ['Sin activar','warn'];
+  }
+
+  function ensureCenterDialog(){
+    let dlg=document.querySelector('#miDiaCenterDialog');
+    if(dlg)return dlg;
+
+    dlg=document.createElement('dialog');
+    dlg.id='miDiaCenterDialog';
+    dlg.className='mi-dia-center';
+    dlg.innerHTML=`
+      <div class="mi-center-panel">
+        <div class="mi-center-head">
+          <div>
+            <span class="mi-center-eyebrow">CENTRO DE AVISOS</span>
+            <h2>Recordatorios</h2>
+          </div>
+          <button type="button" class="mi-center-close" aria-label="Cerrar">×</button>
+        </div>
+
+        <div class="mi-center-stats">
+          <div><span>Próximos</span><strong id="miCenterCount">0</strong></div>
+          <div><span>Sonido</span><strong id="miCenterSound">—</strong></div>
+          <div><span>Vibración</span><strong id="miCenterVibration">—</strong></div>
+        </div>
+
+        <div class="mi-center-status">
+          <span>Notificaciones</span>
+          <strong id="miCenterNotif">—</strong>
+        </div>
+
+        <div id="miCenterQuietState" class="mi-center-quiet"></div>
+
+        <div class="mi-center-subhead">
+          <strong>Próximos avisos</strong>
+          <span id="miCenterMiniCount"></span>
+        </div>
+        <div id="miCenterList" class="mi-center-list"></div>
+
+        <div class="mi-center-actions">
+          <button type="button" id="miCenterQuietBtn" class="ghost">Silenciar 1 h</button>
+          <button type="button" id="miCenterGoAgenda" class="primary">Ver agenda</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(dlg);
+
+    const css=document.createElement('style');
+    css.textContent=`
+      .mi-dia-center{border:0;padding:0;background:transparent;color:var(--text);width:min(92vw,470px);max-height:84vh}
+      .mi-dia-center::backdrop{background:rgba(3,12,22,.68);backdrop-filter:blur(4px)}
+      .mi-center-panel{border:1px solid var(--line);border-radius:22px;padding:18px;background:linear-gradient(180deg,rgba(18,52,83,.98),rgba(7,23,39,.99));box-shadow:0 24px 70px rgba(0,0,0,.5)}
+      .mi-center-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px}
+      .mi-center-head h2{margin:2px 0 0;font-size:1.35rem}
+      .mi-center-eyebrow{font-size:.7rem;font-weight:800;letter-spacing:.12em;color:#7cc7ff}
+      .mi-center-close{border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--text);border-radius:12px;width:38px;height:38px;font-size:1.5rem;line-height:1;cursor:pointer}
+      .mi-center-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px}
+      .mi-center-stats>div,.mi-center-status{border:1px solid var(--line);background:rgba(255,255,255,.035);border-radius:14px;padding:11px}
+      .mi-center-stats span,.mi-center-status span{display:block;font-size:.72rem;opacity:.7;margin-bottom:4px}
+      .mi-center-stats strong{font-size:1rem}
+      .mi-center-status{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+      .mi-center-status span{margin:0}
+      #miCenterNotif.good{color:#7ff0c5} #miCenterNotif.bad{color:#ff9cab} #miCenterNotif.warn{color:#ffd37c}
+      .mi-center-quiet{font-size:.8rem;padding:9px 11px;border-radius:12px;margin-bottom:12px;background:rgba(39,133,103,.12);border:1px solid rgba(83,210,167,.2);color:#9cebd0}
+      .mi-center-quiet.active{background:rgba(185,123,32,.13);border-color:rgba(255,185,76,.25);color:#ffd18a}
+      .mi-center-subhead{display:flex;justify-content:space-between;align-items:center;margin:10px 2px 8px}
+      .mi-center-subhead span{font-size:.74rem;opacity:.65}
+      .mi-center-list{display:grid;gap:8px;max-height:34vh;overflow:auto;padding-right:2px}
+      .mi-center-item{display:grid;grid-template-columns:42px 1fr;gap:10px;align-items:center;border:1px solid var(--line);background:rgba(255,255,255,.025);border-radius:14px;padding:10px}
+      .mi-center-bell{display:grid;place-items:center;width:40px;height:40px;border-radius:12px;background:rgba(53,153,255,.12);font-size:1.1rem}
+      .mi-center-item strong{display:block;font-size:.88rem;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      .mi-center-item span{display:block;font-size:.72rem;opacity:.7}
+      .mi-center-empty{text-align:center;padding:24px 12px;opacity:.65;border:1px dashed var(--line);border-radius:14px}
+      .mi-center-actions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:14px}
+      #requestNotificationsMobile{position:relative}
+      #requestNotificationsMobile[data-has-items="true"]{border-color:#2f9cff}
+      @media(max-width:560px){.mi-center-panel{padding:15px}.mi-dia-center{width:94vw}.mi-center-stats{gap:6px}.mi-center-stats>div{padding:9px}}
+    `;
+    document.head.appendChild(css);
+
+    dlg.querySelector('.mi-center-close').onclick=()=>dlg.close();
+    dlg.addEventListener('click',e=>{
+      if(e.target===dlg)dlg.close();
+    });
+
+    dlg.querySelector('#miCenterQuietBtn').onclick=()=>{
+      if(isQuietMode()){
+        localStorage.removeItem('midia.quietUntil');
+      }else{
+        localStorage.setItem('midia.quietUntil',String(Date.now()+60*60*1000));
+        try{navigator.vibrate?.(0)}catch{}
+      }
+      renderCenter();
+    };
+
+    dlg.querySelector('#miCenterGoAgenda').onclick=()=>{
+      dlg.close();
+      const target=document.querySelector('.next-card')||document.querySelector('.timeline-card');
+      target?.scrollIntoView({behavior:'smooth',block:'start'});
+    };
+
+    return dlg;
+  }
+
+  function renderCenter(){
+    const items=upcomingCenterTasks();
+    const count=items.length;
+    const dlg=document.querySelector('#miDiaCenterDialog');
+
     const mobile=document.querySelector('#requestNotificationsMobile');
-    if(!mobile)return;
-    const active='Notification' in window && Notification.permission==='granted';
-    mobile.textContent=active?'🔔 Activos':'🔔 Avisos';
-    mobile.dataset.active=active?'true':'false';
+    if(mobile){
+      mobile.textContent=count?`🔔 ${count}`:'🔔';
+      mobile.title=count?`${count} aviso${count===1?'':'s'} próximo${count===1?'':'s'}`:'Centro de avisos';
+      mobile.dataset.active=('Notification' in window && Notification.permission==='granted')?'true':'false';
+      mobile.dataset.hasItems=count?'true':'false';
+    }
+
+    const side=document.querySelector('#requestNotifications');
+    if(side){
+      side.textContent=count?`🔔 Avisos (${count})`:'🔔 Centro de avisos';
+    }
+
+    if(!dlg)return;
+
+    const [pText,pClass]=permissionText();
+    dlg.querySelector('#miCenterCount').textContent=String(count);
+    dlg.querySelector('#miCenterSound').textContent=items.some(t=>t.sound!==false)?'Activo':'—';
+    dlg.querySelector('#miCenterVibration').textContent=items.some(t=>t.vibrate!==false)?'Activa':'—';
+
+    const notif=dlg.querySelector('#miCenterNotif');
+    notif.textContent=pText;
+    notif.className=pClass;
+
+    const quiet=isQuietMode();
+    const quietState=dlg.querySelector('#miCenterQuietState');
+    const quietBtn=dlg.querySelector('#miCenterQuietBtn');
+    if(quiet){
+      const until=new Date(getQuietUntil()).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'});
+      quietState.textContent=`🔕 Avisos silenciados temporalmente hasta ${until}. Las tareas seguirán apareciendo en pantalla.`;
+      quietState.classList.add('active');
+      quietBtn.textContent='Reactivar avisos';
+    }else{
+      quietState.textContent='🔔 Sonido y vibración disponibles para tus recordatorios.';
+      quietState.classList.remove('active');
+      quietBtn.textContent='Silenciar 1 h';
+    }
+
+    dlg.querySelector('#miCenterMiniCount').textContent=count?`${count} pendientes`:'Sin pendientes';
+
+    const list=dlg.querySelector('#miCenterList');
+    list.innerHTML='';
+    if(!count){
+      const empty=document.createElement('div');
+      empty.className='mi-center-empty';
+      empty.textContent='Sin avisos pendientes.';
+      list.appendChild(empty);
+    }else{
+      items.slice(0,6).forEach(t=>{
+        const row=document.createElement('div');
+        row.className='mi-center-item';
+
+        const icon=document.createElement('div');
+        icon.className='mi-center-bell';
+        icon.textContent='🔔';
+
+        const body=document.createElement('div');
+        const title=document.createElement('strong');
+        title.textContent=t.title||'Recordatorio';
+        const meta=document.createElement('span');
+        const flags=[centerDate(t.when)];
+        if(t.sound!==false)flags.push('🔊');
+        if(t.vibrate!==false)flags.push('📳');
+        meta.textContent=flags.join(' · ');
+
+        body.append(title,meta);
+        row.append(icon,body);
+        list.appendChild(row);
+      });
+    }
   }
 
   async function enableNotifications(){
     await unlockAudio();
     if(!('Notification' in window)){
-      alert('Este dispositivo no admite notificaciones web.');
       return false;
     }
     if(Notification.permission==='granted'){
-      updateAvisosButton();
+      if(typeof updateNotifStatus==='function')updateNotifStatus();
+      renderCenter();
       return true;
     }
     if(Notification.permission==='denied'){
-      alert('Activa las notificaciones desde Ajustes > Mi Día > Notificaciones.');
+      renderCenter();
       return false;
     }
+
     await Notification.requestPermission();
     if(typeof updateNotifStatus==='function')updateNotifStatus();
-    updateAvisosButton();
+    renderCenter();
     return Notification.permission==='granted';
   }
 
+  async function openCenter(){
+    if('Notification' in window && Notification.permission==='default'){
+      await enableNotifications();
+    }
+    const dlg=ensureCenterDialog();
+    renderCenter();
+    if(!dlg.open)dlg.showModal();
+  }
+
   const activate=document.querySelector('#requestNotifications');
-  if(activate)activate.onclick=enableNotifications;
+  if(activate)activate.onclick=openCenter;
 
   const topActions=document.querySelector('.top-actions');
   if(topActions && !document.querySelector('#requestNotificationsMobile')){
@@ -261,19 +441,31 @@
     mobileBtn.id='requestNotificationsMobile';
     mobileBtn.type='button';
     mobileBtn.className='ghost';
-    mobileBtn.onclick=enableNotifications;
+    mobileBtn.setAttribute('aria-label','Centro de avisos');
+    mobileBtn.onclick=openCenter;
     topActions.insertBefore(mobileBtn,topActions.firstChild);
 
     const style=document.createElement('style');
     style.textContent=`
-      #requestNotificationsMobile{display:none;border:1px solid var(--line);padding:8px 10px;white-space:nowrap}
-      #requestNotificationsMobile[data-active="true"]{border-color:#1d765d;color:#7ff0c5}
+      #requestNotificationsMobile{display:none;border:1px solid var(--line);padding:8px 10px;white-space:nowrap;min-width:42px}
+      #requestNotificationsMobile[data-active="true"]{color:#7ff0c5}
       @media(max-width:900px){#requestNotificationsMobile{display:inline-flex;align-items:center;justify-content:center}}
       @media(max-width:560px){#requestNotificationsMobile{font-size:.76rem;padding:7px 8px}.top-actions{gap:5px}}
     `;
     document.head.appendChild(style);
   }
-  updateAvisosButton();
+
+  // Se actualiza cuando la app vuelve a renderizar tareas.
+  const badge=document.querySelector('#nextBadge');
+  if(badge){
+    new MutationObserver(()=>{
+      renderCenter();
+      if(document.querySelector('#miDiaCenterDialog')?.open)renderCenter();
+    }).observe(badge,{childList:true,characterData:true,subtree:true});
+  }
+
+  renderCenter();
+  setInterval(renderCenter,60*1000);
 
   if(typeof showAlarm==='function'){
     showAlarm=async function(t){
@@ -285,13 +477,15 @@
 
       if(!alarmDialog.open)alarmDialog.showModal();
 
-      if(t.sound){
+      const quiet=isQuietMode();
+
+      if(t.sound && !quiet){
         await window.playMelody(t.soundType,t.volume);
         if(alarmTimer)clearInterval(alarmTimer);
         alarmTimer=setInterval(()=>window.playMelody(t.soundType,t.volume),5000);
       }
 
-      if(t.vibrate){
+      if(t.vibrate && !quiet){
         window.vibrateWith(t.vibrationPattern);
       }
 
@@ -305,11 +499,11 @@
             tag:`mi-dia-task-${t.id}`,
             renotify:true,
             requireInteraction:true,
-            silent:false,
+            silent:quiet || !t.sound,
             timestamp:Date.now()
           };
 
-          if(t.vibrate){
+          if(t.vibrate && !quiet){
             options.vibrate=NOTIFICATION_PATTERNS[t.vibrationPattern]||NOTIFICATION_PATTERNS.standard;
           }
 
@@ -330,12 +524,12 @@
   document.addEventListener('visibilitychange',()=>{
     if(!document.hidden){
       if(audioCtx?.state==='suspended')audioCtx.resume().catch(()=>{});
-      updateAvisosButton();
+      renderCenter();
     }
   });
 
   window.addEventListener('focus',()=>{
     if(audioCtx?.state==='suspended')audioCtx.resume().catch(()=>{});
-    updateAvisosButton();
+    renderCenter();
   });
 })();
