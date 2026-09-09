@@ -371,3 +371,20 @@ dialog:not(.blue-picker-dialog){
 .picker-preview-row{display:flex;align-items:center;justify-content:space-between;margin:12px 2px 2px;color:#9ecaf1}
 .round-play{width:48px;height:48px;border-radius:50%;border:1px solid rgba(74,163,223,.24);background:linear-gradient(135deg,#0c8df7,#25c8ff);color:#fff;cursor:pointer}
 @media(max-width:560px){.blue-picker-panel{padding:15px;border-radius:24px}.picker-trigger{padding:13px 14px}.calendar-day{border-radius:12px}.time-wheel{max-height:232px}}
+
+
+/* v1.4n — elimina los últimos menús blancos nativos en móvil */
+.compact-picker-trigger{display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:190px;border:1px solid color-mix(in srgb,var(--line) 62%,#27baff 38%);border-radius:14px;padding:10px 14px;background:linear-gradient(180deg,#0b263b,#081c2d);color:#edf8ff;cursor:pointer}
+.compact-picker-trigger b{color:#8ddcff;font-size:1.1rem}
+@media(max-width:560px){
+  .topbar{height:auto!important;min-height:96px!important;padding:30px 16px 12px!important;align-items:center!important}
+  .top-actions{margin-left:auto;gap:8px!important}
+  .theme-select,.status-pill,#installBtn{display:none!important}
+  .brand{align-items:center!important}
+  .brand .logo{width:58px!important;height:58px!important;flex:0 0 58px!important}
+  .brand strong{font-size:1.15rem!important}
+  .section-head .compact-picker-trigger{width:100%;min-width:0}
+}
+@media(display-mode:standalone) and (max-width:560px){
+  .topbar{padding-top:30px!important;min-height:96px!important;height:auto!important}
+}

@@ -24,7 +24,7 @@ function setDateValue(dateStr){$('#date').value=dateStr;const d=new Date(`${date
 function setTimeValue(timeStr){$('#time').value=timeStr;$('#timePickerValue').textContent=timeStr}
 function setRepeatValue(value){$('#repeat').value=value;selectedRepeatValue=value;const text={none:'Solo una vez','5m':'Cada 5 minutos',daily:'Diario',weekdays:'Días específicos de la semana'}[value]||'Solo una vez';$('#repeatPickerValue').textContent=text;syncWeekdayPicker()}
 function setVibrationValue(value){$('#vibrationPattern').value=value;selectedVibrationValue=value;const text={standard:'Estándar',short:'Corta',double:'Doble',triple:'Triple',long:'Larga'}[value]||'Estándar';$('#vibrationPickerValue').textContent=text}
-function openNew(){const now=nextQuarterHour(new Date());form.reset();$('#alarm').checked=true;$('#sound').checked=true;$('#vibrate').checked=true;$('#soundType').value='soft-bell';$('#volume').value='70';$('#volumeValue').textContent='70%';setVibrationValue('standard');setRepeatValue('none');syncAlarmOptions();$('#date').min=isoDate(new Date());$('#date').max=maxDate();setDateValue(isoDate(now));setTimeValue(`${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`);$('#soundPickerValue').textContent=soundName('soft-bell');dialog.showModal();$('#title').focus()}
+function openNew(){const now=nextQuarterHour(new Date());form.reset();$('#alarm').checked=true;$('#sound').checked=true;$('#vibrate').checked=true;$('#soundType').value='soft-bell';$('#volume').value='70';$('#volumeValue').textContent='70%';setVibrationValue('standard');setRepeatValue('none');setStepValue('15');syncAlarmOptions();$('#date').min=isoDate(new Date());$('#date').max=maxDate();setDateValue(isoDate(now));setTimeValue(`${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`);$('#soundPickerValue').textContent=soundName('soft-bell');dialog.showModal();$('#title').focus()}
 $('#date').min=isoDate(new Date());$('#date').max=maxDate();
 $('#newBtn').onclick=openNew;$('#goNew').onclick=openNew;$('#closeDialog').onclick=()=>dialog.close();$('#cancelBtn').onclick=()=>dialog.close();
 $('#step').onchange=e=>{if(e.target.value==='15'&&$('#time').value){let [h,m]=$('#time').value.split(':').map(Number);let total=h*60+m;total=Math.round(total/15)*15;if(total>=1440)total=1425;h=Math.floor(total/60);m=total%60;setTimeValue(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`)}};
@@ -151,8 +151,8 @@ const savedTheme=localStorage.getItem('midia.theme')||'system';themeSelect.value
 
 
 // --- Pickers azules: fecha, hora, melodía, repetición y vibración ---
-const pickerState={hour:'00',minute:'00',melody:$('#soundType').value||'soft-bell',repeat:$('#repeat').value||'none',vibration:$('#vibrationPattern').value||'standard'};
-const dateDialog=$('#datePickerDialog'), timeDialog=$('#timePickerDialog'), melodyDialog=$('#melodyPickerDialog'), repeatDialog=$('#repeatPickerDialog'), vibrationDialog=$('#vibrationPickerDialog');
+const pickerState={hour:'00',minute:'00',melody:$('#soundType').value||'soft-bell',repeat:$('#repeat').value||'none',vibration:$('#vibrationPattern').value||'standard',step:$('#step').value||'15',viewStep:$('#viewStep').value||'15'};
+const dateDialog=$('#datePickerDialog'), timeDialog=$('#timePickerDialog'), melodyDialog=$('#melodyPickerDialog'), repeatDialog=$('#repeatPickerDialog'), vibrationDialog=$('#vibrationPickerDialog'), stepDialog=$('#stepPickerDialog'), viewStepDialog=$('#viewStepPickerDialog');
 
 function openPicker(dlg){ if(dlg && !dlg.open) dlg.showModal(); }
 function closePicker(dlg){ if(dlg && dlg.open) dlg.close(); }
@@ -200,6 +200,44 @@ function openMelodyPicker(){
 $('#soundPickerButton').onclick=openMelodyPicker;
 $('#pickerPreviewSound').onclick=()=>playMelody(pickerState.melody,$('#volume').value);
 $('#acceptMelodyPicker').onclick=()=>{ $('#soundType').value=pickerState.melody; $('#soundPickerValue').textContent=soundName(pickerState.melody); closePicker(melodyDialog); };
+
+
+const STEP_OPTIONS=[['1','Minuto a minuto'],['15','Intervalos de 15 min']];
+function setStepValue(value){
+  $('#step').value=value; pickerState.step=value; $('#stepPickerValue').textContent=value==='1'?'Minuto a minuto':'Intervalos de 15 min';
+  if(value==='15'&&$('#time').value){let [h,m]=$('#time').value.split(':').map(Number);let total=h*60+m;total=Math.round(total/15)*15;if(total>=1440)total=1425;h=Math.floor(total/60);m=total%60;setTimeValue(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`)}
+}
+function openStepPicker(){
+  pickerState.step=$('#step').value||'15';
+  const list=$('#stepPickerList'); list.innerHTML='';
+  STEP_OPTIONS.forEach(([value,label])=>{
+    const row=document.createElement('button'); row.type='button'; row.className='option-row'+(value===pickerState.step?' active':'');
+    row.innerHTML=`<span>${label}</span><small>${value==='1'?'Máxima precisión':'Captura rápida y ordenada'}</small>`;
+    row.onclick=()=>{ pickerState.step=value; [...list.children].forEach(x=>x.classList.remove('active')); row.classList.add('active'); };
+    list.appendChild(row);
+  });
+  openPicker(stepDialog);
+}
+$('#stepPickerButton').onclick=openStepPicker;
+$('#acceptStepPicker').onclick=()=>{ setStepValue(pickerState.step); closePicker(stepDialog); };
+
+function setViewStepValue(value){
+  $('#viewStep').value=value; pickerState.viewStep=value; $('#viewStepPickerValue').textContent=value==='1'?'Minuto a minuto':'Cada 15 minutos';
+  $('#viewStep').dispatchEvent(new Event('change',{bubbles:true}));
+}
+function openViewStepPicker(){
+  pickerState.viewStep=$('#viewStep').value||'15';
+  const list=$('#viewStepPickerList'); list.innerHTML='';
+  [['1','Minuto a minuto'],['15','Cada 15 minutos']].forEach(([value,label])=>{
+    const row=document.createElement('button'); row.type='button'; row.className='option-row'+(value===pickerState.viewStep?' active':'');
+    row.innerHTML=`<span>${label}</span><small>Intervalo de visualización</small>`;
+    row.onclick=()=>{ pickerState.viewStep=value; [...list.children].forEach(x=>x.classList.remove('active')); row.classList.add('active'); };
+    list.appendChild(row);
+  });
+  openPicker(viewStepDialog);
+}
+$('#viewStepPickerButton').onclick=openViewStepPicker;
+$('#acceptViewStepPicker').onclick=()=>{ setViewStepValue(pickerState.viewStep); closePicker(viewStepDialog); };
 
 const REPEAT_OPTIONS=[['none','Solo una vez'],['5m','Cada 5 minutos'],['daily','Diario'],['weekdays','Días específicos de la semana']];
 function openRepeatPicker(){
@@ -266,4 +304,6 @@ $('#prevMonthBtn').onclick=()=>{ selectedCalendarDate=new Date(selectedCalendarD
 $('#nextMonthBtn').onclick=()=>{ selectedCalendarDate=new Date(selectedCalendarDate.getFullYear(),selectedCalendarDate.getMonth()+1,1); selectedCalendarDate=clampDateToRange(selectedCalendarDate); renderCalendar(); };
 $('#acceptDatePicker').onclick=()=>{ setDateValue(isoDate(selectedCalendarDate)); closePicker(dateDialog); };
 
+if($('#stepPickerValue')) $('#stepPickerValue').textContent=$('#step').value==='1'?'Minuto a minuto':'Intervalos de 15 min';
+if($('#viewStepPickerValue')) $('#viewStepPickerValue').textContent=$('#viewStep').value==='1'?'Minuto a minuto':'Cada 15 minutos';
 render();

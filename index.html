@@ -49,10 +49,13 @@
           <section class="card timeline-card">
             <div class="section-head">
               <h2>Mis tareas de hoy</h2>
-              <select id="viewStep" aria-label="Intervalo de agenda">
+              <select id="viewStep" class="native-shadow-control" aria-hidden="true" tabindex="-1">
                 <option value="1">Minuto a minuto</option>
                 <option value="15" selected>Cada 15 minutos</option>
               </select>
+              <button id="viewStepPickerButton" type="button" class="compact-picker-trigger" aria-haspopup="dialog">
+                <span id="viewStepPickerValue">Cada 15 minutos</span><b>⌄</b>
+              </button>
             </div>
             <div id="timeline" class="timeline"></div>
           </section>
@@ -88,7 +91,12 @@
         </label>
       </div>
       <div class="two">
-        <label>Captura de tiempo<select id="step"><option value="1">Minuto a minuto</option><option value="15" selected>Intervalos de 15 min</option></select></label>
+        <label>Captura de tiempo
+          <select id="step" class="native-shadow-control" aria-hidden="true" tabindex="-1"><option value="1">Minuto a minuto</option><option value="15" selected>Intervalos de 15 min</option></select>
+          <button id="stepPickerButton" type="button" class="picker-trigger" aria-haspopup="dialog">
+            <span>Intervalo</span><strong id="stepPickerValue">Intervalos de 15 min</strong>
+          </button>
+        </label>
         <label>Recordar cada
           <select id="repeat" class="native-shadow-control" aria-hidden="true" tabindex="-1">
             <option value="none">Solo una vez</option>
@@ -197,6 +205,30 @@
         </div>
       </div>
       <button id="acceptTimePicker" class="primary picker-accept" type="button">Aceptar</button>
+    </div>
+  </dialog>
+
+  <dialog id="stepPickerDialog" class="blue-picker-dialog">
+    <div class="blue-picker-panel option-panel">
+      <div class="blue-picker-head">
+        <button type="button" class="picker-close" data-close-picker="step">×</button>
+        <strong>Captura de tiempo</strong>
+        <span></span>
+      </div>
+      <div id="stepPickerList" class="option-picker-list"></div>
+      <button id="acceptStepPicker" class="primary picker-accept" type="button">Aceptar</button>
+    </div>
+  </dialog>
+
+  <dialog id="viewStepPickerDialog" class="blue-picker-dialog">
+    <div class="blue-picker-panel option-panel">
+      <div class="blue-picker-head">
+        <button type="button" class="picker-close" data-close-picker="viewstep">×</button>
+        <strong>Vista de agenda</strong>
+        <span></span>
+      </div>
+      <div id="viewStepPickerList" class="option-picker-list"></div>
+      <button id="acceptViewStepPicker" class="primary picker-accept" type="button">Aceptar</button>
     </div>
   </dialog>
 
