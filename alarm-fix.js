@@ -778,17 +778,174 @@
     });
   });
 
-  // Navegación móvil de la muestra, reutilizando funciones existentes.
+  // v1.4o — navegación móvil con funciones reales.
+  const navDateFmt=new Intl.DateTimeFormat('es-MX',{weekday:'short',day:'2-digit',month:'short',year:'numeric'});
+  const navTimeFmt=new Intl.DateTimeFormat('es-MX',{hour:'2-digit',minute:'2-digit'});
+  let navCalendarView=new Date();
+  navCalendarView=new Date(navCalendarView.getFullYear(),navCalendarView.getMonth(),1);
+  let navCalendarSelected=new Date();
+
+  function navTasks(){
+    try{
+      if(typeof tasks!=='undefined' && Array.isArray(tasks)) return tasks;
+      return JSON.parse(localStorage.getItem('midia.tasks')||'[]');
+    }catch{return []}
+  }
+  function navIso(d){const z=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`}
+  function navRepeat(t){
+    if(t.repeat==='5m')return 'Cada 5 min';
+    if(t.repeat==='daily')return 'Diario';
+    if(t.repeat==='weekdays')return 'Días específicos';
+    return 'Una vez';
+  }
+  function closeNavSheets(){document.querySelectorAll('.midia-nav-dialog[open]').forEach(d=>d.close())}
+  function setDockActive(name){document.querySelectorAll('.mobile-dock button').forEach(x=>x.classList.toggle('active',x.dataset.dock===name))}
+
+  function ensureNavShell(id,title,subtitle=''){
+    let dlg=document.querySelector(`#${id}`);
+    if(dlg)return dlg;
+    dlg=document.createElement('dialog');
+    dlg.id=id;dlg.className='midia-nav-dialog';
+    dlg.innerHTML=`<div class="midia-nav-panel">
+      <div class="midia-nav-head"><div><span>${subtitle}</span><h2>${title}</h2></div><button type="button" class="midia-nav-close">×</button></div>
+      <div class="midia-nav-body"></div>
+    </div>`;
+    document.body.appendChild(dlg);
+    dlg.querySelector('.midia-nav-close').onclick=()=>dlg.close();
+    dlg.addEventListener('click',e=>{if(e.target===dlg)dlg.close()});
+    dlg.addEventListener('close',()=>{document.querySelectorAll('.mobile-dock button').forEach(x=>x.classList.remove('active'))});
+    return dlg;
+  }
+
+  function renderProgrammed(){
+    const dlg=ensureNavShell('midiaProgrammedDialog','Programados','PRÓXIMOS RECORDATORIOS');
+    const body=dlg.querySelector('.midia-nav-body');
+    const now=Date.now();
+    const list=navTasks().filter(t=>!t.done && new Date(t.when).getTime()>=now).sort((a,b)=>new Date(a.when)-new Date(b.when));
+    body.innerHTML=`<div class="midia-nav-stats"><div><span>Pendientes</span><strong>${list.length}</strong></div><div><span>Hoy</span><strong>${list.filter(t=>navIso(new Date(t.when))===navIso(new Date())).length}</strong></div><div><span>Con alarma</span><strong>${list.filter(t=>t.alarm!==false).length}</strong></div></div>
+      <div id="midiaProgrammedList" class="midia-nav-list"></div>
+      <button id="midiaProgrammedNew" class="primary midia-nav-mainbtn" type="button">＋ Nueva tarea</button>`;
+    const box=body.querySelector('#midiaProgrammedList');
+    if(!list.length){box.innerHTML='<div class="midia-nav-empty">No tienes tareas programadas.</div>'}
+    list.slice(0,30).forEach(t=>{
+      const row=document.createElement('div');row.className='midia-nav-item';
+      const d=new Date(t.when);
+      row.innerHTML=`<div class="midia-nav-item-main"><strong></strong><span></span></div><div class="midia-nav-item-actions"><button type="button" data-act="done">✓</button><button type="button" data-act="snooze">+5</button></div>`;
+      row.querySelector('strong').textContent=t.title||'Tarea';
+      row.querySelector('span').textContent=`${navDateFmt.format(d)} · ${navTimeFmt.format(d)} · ${navRepeat(t)}`;
+      row.querySelector('[data-act="done"]').onclick=()=>{try{if(typeof completeTask==='function')completeTask(t)}catch{};renderProgrammed()};
+      row.querySelector('[data-act="snooze"]').onclick=()=>{try{if(typeof snoozeTask==='function')snoozeTask(t,5)}catch{};renderProgrammed()};
+      box.appendChild(row);
+    });
+    body.querySelector('#midiaProgrammedNew').onclick=()=>{dlg.close();document.querySelector('#newBtn')?.click()};
+    return dlg;
+  }
+
+  function renderCalendarOverview(){
+    const dlg=ensureNavShell('midiaCalendarOverviewDialog','Calendario','AGENDA MENSUAL');
+    const body=dlg.querySelector('.midia-nav-body');
+    body.innerHTML=`<div class="midia-calendar-toolbar"><button id="midiaCalPrev" type="button">‹</button><strong id="midiaCalTitle"></strong><button id="midiaCalNext" type="button">›</button></div>
+      <div class="midia-calendar-week"><span>Dom</span><span>Lun</span><span>Mar</span><span>Mié</span><span>Jue</span><span>Vie</span><span>Sáb</span></div>
+      <div id="midiaCalGrid" class="midia-calendar-grid"></div>
+      <div class="midia-day-head"><span>Programados para</span><strong id="midiaCalSelected"></strong></div>
+      <div id="midiaCalDayList" class="midia-nav-list compact"></div>
+      <button id="midiaCalNew" class="primary midia-nav-mainbtn" type="button">＋ Programar en este día</button>`;
+    const monthNames=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    body.querySelector('#midiaCalTitle').textContent=`${monthNames[navCalendarView.getMonth()]} ${navCalendarView.getFullYear()}`;
+    const grid=body.querySelector('#midiaCalGrid');
+    const first=new Date(navCalendarView.getFullYear(),navCalendarView.getMonth(),1);
+    const start=first.getDay();
+    const days=new Date(first.getFullYear(),first.getMonth()+1,0).getDate();
+    const prevDays=new Date(first.getFullYear(),first.getMonth(),0).getDate();
+    const taskDates=new Set(navTasks().filter(t=>!t.done).map(t=>navIso(new Date(t.when))));
+    for(let i=0;i<42;i++){
+      let d,muted=false;
+      if(i<start){d=new Date(first.getFullYear(),first.getMonth()-1,prevDays-start+i+1);muted=true}
+      else if(i>=start+days){d=new Date(first.getFullYear(),first.getMonth()+1,i-(start+days)+1);muted=true}
+      else d=new Date(first.getFullYear(),first.getMonth(),i-start+1);
+      const b=document.createElement('button');b.type='button';b.className='midia-calendar-day';b.textContent=d.getDate();
+      if(muted)b.classList.add('muted');
+      if(navIso(d)===navIso(new Date()))b.classList.add('today');
+      if(navIso(d)===navIso(navCalendarSelected))b.classList.add('active');
+      if(taskDates.has(navIso(d)))b.classList.add('has-task');
+      b.onclick=()=>{navCalendarSelected=d;renderCalendarOverview()};
+      grid.appendChild(b);
+    }
+    body.querySelector('#midiaCalSelected').textContent=navDateFmt.format(navCalendarSelected);
+    const dayList=body.querySelector('#midiaCalDayList');
+    const selectedTasks=navTasks().filter(t=>!t.done && navIso(new Date(t.when))===navIso(navCalendarSelected)).sort((a,b)=>new Date(a.when)-new Date(b.when));
+    if(!selectedTasks.length)dayList.innerHTML='<div class="midia-nav-empty small">Sin tareas para este día.</div>';
+    selectedTasks.forEach(t=>{
+      const row=document.createElement('div');row.className='midia-nav-item simple';
+      row.innerHTML='<div class="midia-nav-item-main"><strong></strong><span></span></div>';
+      row.querySelector('strong').textContent=t.title||'Tarea';
+      row.querySelector('span').textContent=`${navTimeFmt.format(new Date(t.when))} · ${navRepeat(t)}`;
+      dayList.appendChild(row);
+    });
+    body.querySelector('#midiaCalPrev').onclick=()=>{navCalendarView=new Date(navCalendarView.getFullYear(),navCalendarView.getMonth()-1,1);renderCalendarOverview()};
+    body.querySelector('#midiaCalNext').onclick=()=>{navCalendarView=new Date(navCalendarView.getFullYear(),navCalendarView.getMonth()+1,1);renderCalendarOverview()};
+    body.querySelector('#midiaCalNew').onclick=()=>{const chosen=navIso(navCalendarSelected);dlg.close();document.querySelector('#newBtn')?.click();setTimeout(()=>{try{if(typeof setDateValue==='function')setDateValue(chosen)}catch{}},20)};
+    return dlg;
+  }
+
+  function renderGoals(){
+    const dlg=ensureNavShell('midiaGoalsDialog','Metas','PROGRESO DEL DÍA');
+    const body=dlg.querySelector('.midia-nav-body');
+    const all=navTasks();const today=navIso(new Date());
+    const doneToday=all.filter(t=>t.done && navIso(new Date(t.when))===today).length;
+    const pendingToday=all.filter(t=>!t.done && navIso(new Date(t.when))===today).length;
+    let goal=Math.max(1,Math.min(20,Number(localStorage.getItem('midia.dailyGoal')||3)));
+    const pct=Math.min(100,Math.round(doneToday/goal*100));
+    body.innerHTML=`<div class="midia-goal-card"><div class="midia-goal-ring" style="--goal:${pct}%"><div><strong>${pct}%</strong><span>cumplido</span></div></div><div><span class="midia-mini-label">Meta diaria</span><h3 id="midiaGoalText">${goal} tareas</h3><div class="midia-goal-stepper"><button id="midiaGoalMinus" type="button">−</button><strong id="midiaGoalValue">${goal}</strong><button id="midiaGoalPlus" type="button">＋</button></div></div></div>
+      <div class="midia-nav-stats"><div><span>Completadas hoy</span><strong>${doneToday}</strong></div><div><span>Pendientes hoy</span><strong>${pendingToday}</strong></div><div><span>Total activas</span><strong>${all.filter(t=>!t.done).length}</strong></div></div>
+      <div class="midia-goal-note">La meta diaria se guarda en este dispositivo y puedes ajustarla entre 1 y 20 tareas.</div>`;
+    const updateGoal=(n)=>{goal=Math.max(1,Math.min(20,n));localStorage.setItem('midia.dailyGoal',String(goal));renderGoals()};
+    body.querySelector('#midiaGoalMinus').onclick=()=>updateGoal(goal-1);
+    body.querySelector('#midiaGoalPlus').onclick=()=>updateGoal(goal+1);
+    return dlg;
+  }
+
+  function applyThemeChoice(mode){
+    const sel=document.querySelector('#themeMode');
+    if(sel){sel.value=mode;sel.dispatchEvent(new Event('change',{bubbles:true}))}
+    else{document.documentElement.dataset.theme=mode;localStorage.setItem('midia.theme',mode)}
+    document.querySelectorAll('[data-midia-theme]').forEach(b=>b.classList.toggle('active',b.dataset.midiaTheme===mode));
+  }
+  function renderMore(){
+    const dlg=ensureNavShell('midiaMoreDialog','Más','CONFIGURACIÓN RÁPIDA');
+    const body=dlg.querySelector('.midia-nav-body');
+    const current=localStorage.getItem('midia.theme')||'system';
+    body.innerHTML=`<button id="midiaMoreNew" class="midia-more-row" type="button"><span>＋</span><div><strong>Nueva tarea</strong><small>Programa un recordatorio</small></div></button>
+      <div class="midia-more-section" id="midiaAppearanceSection"><span class="midia-mini-label">Apariencia</span><div class="midia-theme-segment"><button type="button" data-midia-theme="system">Sistema</button><button type="button" data-midia-theme="light">Claro</button><button type="button" data-midia-theme="dark">Oscuro</button></div></div>
+      <button id="midiaMoreAlerts" class="midia-more-row" type="button"><span>🔔</span><div><strong>Centro de avisos</strong><small>Sonido, vibración y recordatorios</small></div></button>
+      <button id="midiaMoreUpdate" class="midia-more-row" type="button"><span>↻</span><div><strong>Actualizar Mi Día</strong><small>Buscar la versión más reciente</small></div></button>
+      <div class="midia-version">Mi Día v1.4o · Navegación funcional</div>`;
+    body.querySelectorAll('[data-midia-theme]').forEach(b=>{b.classList.toggle('active',b.dataset.midiaTheme===current);b.onclick=()=>applyThemeChoice(b.dataset.midiaTheme)});
+    body.querySelector('#midiaMoreNew').onclick=()=>{dlg.close();document.querySelector('#newBtn')?.click()};
+    body.querySelector('#midiaMoreAlerts').onclick=()=>{dlg.close();openCenter()};
+    body.querySelector('#midiaMoreUpdate').onclick=()=>{const u=document.querySelector('#updateBtn');if(u&&!u.hidden){dlg.close();u.click()}else{try{navigator.serviceWorker?.getRegistration()?.then(r=>r?.update())}catch{};body.querySelector('#midiaMoreUpdate small').textContent='Buscando actualización…';setTimeout(()=>{body.querySelector('#midiaMoreUpdate small').textContent='Ya tienes la versión disponible más reciente'},900)}};
+    return dlg;
+  }
+
+  function openMoreToAppearance(){
+    const dlg=renderMore();setDockActive('more');if(!dlg.open)dlg.showModal();setTimeout(()=>dlg.querySelector('#midiaAppearanceSection')?.scrollIntoView({behavior:'smooth',block:'center'}),50);
+  }
+
+  // Botón compacto de apariencia en la cabecera: recupera Sistema / Claro / Oscuro sin saturar la barra.
+  if(topActions && !document.querySelector('#midiaThemeQuick')){
+    const themeBtn=document.createElement('button');themeBtn.id='midiaThemeQuick';themeBtn.type='button';themeBtn.className='ghost midia-theme-quick';themeBtn.setAttribute('aria-label','Apariencia: Sistema, Claro u Oscuro');themeBtn.textContent='◐';themeBtn.onclick=openMoreToAppearance;
+    const bell=document.querySelector('#requestNotificationsMobile');
+    if(bell)topActions.insertBefore(themeBtn,bell);else topActions.insertBefore(themeBtn,topActions.firstChild);
+  }
+
   document.querySelectorAll('.mobile-dock button').forEach(btn=>{
     btn.addEventListener('click',()=>{
-      document.querySelectorAll('.mobile-dock button').forEach(x=>x.classList.remove('active'));
-      btn.classList.add('active');
-      const action=btn.dataset.dock;
-      if(action==='home')window.scrollTo({top:0,behavior:'smooth'});
-      if(action==='calendar')document.querySelector('.timeline-card')?.scrollIntoView({behavior:'smooth',block:'start'});
+      const action=btn.dataset.dock;setDockActive(action);
+      if(action==='programmed'){const d=renderProgrammed();if(!d.open)d.showModal()}
+      if(action==='calendar'){const d=renderCalendarOverview();if(!d.open)d.showModal()}
       if(action==='alarms')openCenter();
-      if(action==='next')document.querySelector('.next-card')?.scrollIntoView({behavior:'smooth',block:'start'});
-      if(action==='new')document.querySelector('#newBtn')?.click();
+      if(action==='goals'){const d=renderGoals();if(!d.open)d.showModal()}
+      if(action==='more'){const d=renderMore();if(!d.open)d.showModal()}
     });
   });
 
