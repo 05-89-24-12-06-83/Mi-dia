@@ -74,7 +74,12 @@
       </div>
       <label>Título de la tarea<input id="title" required maxlength="80" placeholder="Ej. Llamar al proveedor" /></label>
       <div class="two">
-        <label>Fecha<input id="date" type="date" required /></label>
+        <label>Fecha
+          <input id="date" type="hidden" required />
+          <button id="datePickerButton" type="button" class="picker-trigger" aria-haspopup="dialog">
+            <span>Seleccionar fecha</span><strong id="datePickerValue">--/--/----</strong>
+          </button>
+        </label>
         <label>Hora
           <input id="time" type="hidden" />
           <button id="timePickerButton" type="button" class="picker-trigger" aria-haspopup="dialog">
@@ -85,12 +90,15 @@
       <div class="two">
         <label>Captura de tiempo<select id="step"><option value="1">Minuto a minuto</option><option value="15" selected>Intervalos de 15 min</option></select></label>
         <label>Recordar cada
-          <select id="repeat">
+          <select id="repeat" class="native-shadow-control" aria-hidden="true" tabindex="-1">
             <option value="none">Solo una vez</option>
             <option value="5m">Cada 5 minutos</option>
             <option value="daily">Diario</option>
             <option value="weekdays">Días específicos de la semana</option>
           </select>
+          <button id="repeatPickerButton" type="button" class="picker-trigger" aria-haspopup="dialog">
+            <span>Frecuencia</span><strong id="repeatPickerValue">Solo una vez</strong>
+          </button>
         </label>
       </div>
       <fieldset id="weekdayPicker" class="weekday-picker" hidden>
@@ -131,13 +139,16 @@
       <div class="vibration-card">
         <div class="switch-row"><span>Vibración</span><input id="vibrate" type="checkbox" checked /></div>
         <label>Patrón de vibración
-          <select id="vibrationPattern">
+          <select id="vibrationPattern" class="native-shadow-control" aria-hidden="true" tabindex="-1">
             <option value="standard">Estándar</option>
             <option value="short">Corta</option>
             <option value="double">Doble</option>
             <option value="triple">Triple</option>
             <option value="long">Larga</option>
           </select>
+          <button id="vibrationPickerButton" type="button" class="picker-trigger" aria-haspopup="dialog">
+            <span>Patrón</span><strong id="vibrationPickerValue">Estándar</strong>
+          </button>
         </label>
         <button id="previewVibration" type="button" class="ghost preview-btn">📳 Probar vibración</button>
       </div>
@@ -146,6 +157,26 @@
     </form>
   </dialog>
 
+
+  <dialog id="datePickerDialog" class="blue-picker-dialog">
+    <div class="blue-picker-panel calendar-panel">
+      <div class="blue-picker-head">
+        <button type="button" class="picker-close" data-close-picker="date">×</button>
+        <strong>Seleccionar fecha</strong>
+        <span></span>
+      </div>
+      <div class="calendar-toolbar">
+        <button id="prevMonthBtn" type="button" class="month-nav">‹</button>
+        <div id="calendarMonthLabel" class="calendar-month-label">Mes</div>
+        <button id="nextMonthBtn" type="button" class="month-nav">›</button>
+      </div>
+      <div class="calendar-weekdays">
+        <span>Dom</span><span>Lun</span><span>Mar</span><span>Mié</span><span>Jue</span><span>Vie</span><span>Sáb</span>
+      </div>
+      <div id="calendarGrid" class="calendar-grid"></div>
+      <button id="acceptDatePicker" class="primary picker-accept" type="button">Aceptar</button>
+    </div>
+  </dialog>
 
   <dialog id="timePickerDialog" class="blue-picker-dialog">
     <div class="blue-picker-panel">
@@ -166,6 +197,30 @@
         </div>
       </div>
       <button id="acceptTimePicker" class="primary picker-accept" type="button">Aceptar</button>
+    </div>
+  </dialog>
+
+  <dialog id="repeatPickerDialog" class="blue-picker-dialog">
+    <div class="blue-picker-panel option-panel">
+      <div class="blue-picker-head">
+        <button type="button" class="picker-close" data-close-picker="repeat">×</button>
+        <strong>Recordar cada</strong>
+        <span></span>
+      </div>
+      <div id="repeatPickerList" class="option-picker-list"></div>
+      <button id="acceptRepeatPicker" class="primary picker-accept" type="button">Aceptar</button>
+    </div>
+  </dialog>
+
+  <dialog id="vibrationPickerDialog" class="blue-picker-dialog">
+    <div class="blue-picker-panel option-panel">
+      <div class="blue-picker-head">
+        <button type="button" class="picker-close" data-close-picker="vibration">×</button>
+        <strong>Patrón de vibración</strong>
+        <span></span>
+      </div>
+      <div id="vibrationPickerList" class="option-picker-list"></div>
+      <button id="acceptVibrationPicker" class="primary picker-accept" type="button">Aceptar</button>
     </div>
   </dialog>
 

@@ -8,6 +8,7 @@ const fmtShort=d=>new Intl.DateTimeFormat('es-MX',{day:'2-digit',month:'short',h
 const isoDate=d=>{const z=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`};
 const uid=()=>crypto.randomUUID?crypto.randomUUID():`${Date.now()}-${Math.random().toString(16).slice(2)}`;
 const DAY_LABEL={0:'Dom',1:'Lun',2:'Mar',3:'Mié',4:'Jue',5:'Vie',6:'Sáb'};
+const MONTH_LABEL=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 function normalizeTask(t){
   if(typeof t.repeat==='number') t.repeat=t.repeat===5?'5m':'none';
   return {...t,repeat:t.repeat||'none',weekdays:Array.isArray(t.weekdays)?t.weekdays:[],sound:t.sound!==false,soundType:t.soundType||'soft-bell',volume:Number.isFinite(Number(t.volume))?Number(t.volume):70,vibrate:t.vibrate!==false,vibrationPattern:t.vibrationPattern||'standard',repeatUntil:t.repeatUntil||null};
@@ -15,10 +16,18 @@ function normalizeTask(t){
 function save(){localStorage.setItem('midia.tasks',JSON.stringify(tasks));render()}
 function nextQuarterHour(d){const x=new Date(d);x.setSeconds(0,0);const add=(15-(x.getMinutes()%15))%15||15;x.setMinutes(x.getMinutes()+add);return x}
 function maxDate(){const d=new Date();d.setMonth(d.getMonth()+6);return isoDate(d)}
-function openNew(){const now=nextQuarterHour(new Date());form.reset();$('#alarm').checked=true;$('#sound').checked=true;$('#vibrate').checked=true;$('#soundType').value='soft-bell';$('#volume').value='70';$('#volumeValue').textContent='70%';$('#vibrationPattern').value='standard';$('#repeat').value='none';syncWeekdayPicker();syncAlarmOptions();$('#date').min=isoDate(new Date());$('#date').max=maxDate();$('#date').value=isoDate(now);$('#time').value=`${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;dialog.showModal();$('#title').focus()}
+let selectedCalendarDate=new Date();
+let selectedRepeatValue='none';
+let selectedVibrationValue='standard';
+
+function setDateValue(dateStr){$('#date').value=dateStr;const d=new Date(`${dateStr}T00:00:00`);$('#datePickerValue').textContent=new Intl.DateTimeFormat('es-MX',{day:'2-digit',month:'short',year:'numeric'}).format(d);selectedCalendarDate=d}
+function setTimeValue(timeStr){$('#time').value=timeStr;$('#timePickerValue').textContent=timeStr}
+function setRepeatValue(value){$('#repeat').value=value;selectedRepeatValue=value;const text={none:'Solo una vez','5m':'Cada 5 minutos',daily:'Diario',weekdays:'Días específicos de la semana'}[value]||'Solo una vez';$('#repeatPickerValue').textContent=text;syncWeekdayPicker()}
+function setVibrationValue(value){$('#vibrationPattern').value=value;selectedVibrationValue=value;const text={standard:'Estándar',short:'Corta',double:'Doble',triple:'Triple',long:'Larga'}[value]||'Estándar';$('#vibrationPickerValue').textContent=text}
+function openNew(){const now=nextQuarterHour(new Date());form.reset();$('#alarm').checked=true;$('#sound').checked=true;$('#vibrate').checked=true;$('#soundType').value='soft-bell';$('#volume').value='70';$('#volumeValue').textContent='70%';setVibrationValue('standard');setRepeatValue('none');syncAlarmOptions();$('#date').min=isoDate(new Date());$('#date').max=maxDate();setDateValue(isoDate(now));setTimeValue(`${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`);$('#soundPickerValue').textContent=soundName('soft-bell');dialog.showModal();$('#title').focus()}
 $('#date').min=isoDate(new Date());$('#date').max=maxDate();
 $('#newBtn').onclick=openNew;$('#goNew').onclick=openNew;$('#closeDialog').onclick=()=>dialog.close();$('#cancelBtn').onclick=()=>dialog.close();
-$('#step').onchange=e=>{if(e.target.value==='15'&&$('#time').value){let [h,m]=$('#time').value.split(':').map(Number);let total=h*60+m;total=Math.round(total/15)*15;if(total>=1440)total=1425;h=Math.floor(total/60);m=total%60;$('#time').value=`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`}};
+$('#step').onchange=e=>{if(e.target.value==='15'&&$('#time').value){let [h,m]=$('#time').value.split(':').map(Number);let total=h*60+m;total=Math.round(total/15)*15;if(total>=1440)total=1425;h=Math.floor(total/60);m=total%60;setTimeValue(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`)}};
 function syncWeekdayPicker(){const on=$('#repeat').value==='weekdays';$('#weekdayPicker').hidden=!on}
 $('#repeat').onchange=syncWeekdayPicker;
 
@@ -86,6 +95,7 @@ const SOUND_NAMES={
 };
 const VIBRATION_PATTERNS={standard:[250,120,250],short:[180],double:[180,100,180],triple:[160,90,160,90,160],long:[700]};
 function soundName(k){return SOUND_NAMES[k]||'Campana suave'}
+function vibrationName(k){return {standard:'Estándar',short:'Corta',double:'Doble',triple:'Triple',long:'Larga'}[k]||'Estándar'}
 function playTone(ctx,freq,start,duration,gainValue,type='sine'){const osc=ctx.createOscillator(),gain=ctx.createGain();osc.type=type;osc.frequency.setValueAtTime(freq,start);gain.gain.setValueAtTime(gainValue,start);gain.gain.exponentialRampToValueAtTime(.001,start+duration);osc.connect(gain);gain.connect(ctx.destination);osc.start(start);osc.stop(start+duration)}
 function playMelody(type='soft-bell',volume=70){
   try{const AC=window.AudioContext||window.webkitAudioContext;const ctx=new AC();const v=Math.max(0,Math.min(100,Number(volume)))/100*.22;const t=ctx.currentTime+.02;
@@ -100,11 +110,11 @@ function playMelody(type='soft-bell',volume=70){
   }catch{}
 }
 function vibrateWith(pattern='standard'){if(navigator.vibrate)navigator.vibrate(VIBRATION_PATTERNS[pattern]||VIBRATION_PATTERNS.standard)}
-function syncAlarmOptions(){const soundOn=$('#sound').checked;$('#soundType').disabled=!soundOn;$('#volume').disabled=!soundOn;$('#previewSound').disabled=!soundOn;const vibOn=$('#vibrate').checked;$('#vibrationPattern').disabled=!vibOn;$('#previewVibration').disabled=!vibOn}
+function syncAlarmOptions(){const soundOn=$('#sound').checked;$('#soundType').disabled=!soundOn;$('#volume').disabled=!soundOn;$('#previewSound').disabled=!soundOn;const soundBtn=$('#soundPickerButton'); if(soundBtn) soundBtn.disabled=!soundOn;const vibOn=$('#vibrate').checked;$('#vibrationPattern').disabled=!vibOn;$('#previewVibration').disabled=!vibOn;const vibBtn=$('#vibrationPickerButton'); if(vibBtn) vibBtn.disabled=!vibOn}
 $('#sound').onchange=syncAlarmOptions;$('#vibrate').onchange=syncAlarmOptions;$('#volume').oninput=e=>$('#volumeValue').textContent=`${e.target.value}%`;$('#previewSound').onclick=()=>playMelody($('#soundType').value,$('#volume').value);$('#previewVibration').onclick=()=>vibrateWith($('#vibrationPattern').value);syncAlarmOptions();
 
 async function showAlarm(t){
-  activeAlarmId=t.id;$('#alarmTitle').textContent=t.title;$('#alarmNote').textContent=t.notes||'Tienes una función programada.';$('#alarmSoundState').textContent=t.sound?`🔊 ${soundName(t.soundType)} · ${t.volume}%`:'🔕 Sin sonido';$('#alarmVibrationState').textContent=t.vibrate?`📳 Vibración: ${t.vibrationPattern}`:'📴 Sin vibración';
+  activeAlarmId=t.id;$('#alarmTitle').textContent=t.title;$('#alarmNote').textContent=t.notes||'Tienes una función programada.';$('#alarmSoundState').textContent=t.sound?`🔊 ${soundName(t.soundType)} · ${t.volume}%`:'🔕 Sin sonido';$('#alarmVibrationState').textContent=t.vibrate?`📳 Vibración: ${vibrationName(t.vibrationPattern)}`:'📴 Sin vibración';
   if(!alarmDialog.open)alarmDialog.showModal();
   if(t.sound){playMelody(t.soundType,t.volume);if(alarmTimer)clearInterval(alarmTimer);alarmTimer=setInterval(()=>playMelody(t.soundType,t.volume),5000)}
   if(t.vibrate)vibrateWith(t.vibrationPattern);
@@ -138,4 +148,122 @@ const themeSelect=$('#themeMode');
 const mediaDark=window.matchMedia('(prefers-color-scheme: dark)');
 function applyTheme(mode){document.documentElement.dataset.theme=mode;localStorage.setItem('midia.theme',mode);const effective=mode==='system'?(mediaDark.matches?'dark':'light'):mode;document.querySelector('meta[name="theme-color"]').setAttribute('content',effective==='dark'?'#0b1220':'#16a34a')}
 const savedTheme=localStorage.getItem('midia.theme')||'system';themeSelect.value=savedTheme;applyTheme(savedTheme);themeSelect.onchange=e=>applyTheme(e.target.value);mediaDark.addEventListener?.('change',()=>{if((localStorage.getItem('midia.theme')||'system')==='system')applyTheme('system')});
+
+
+// --- Pickers azules: fecha, hora, melodía, repetición y vibración ---
+const pickerState={hour:'00',minute:'00',melody:$('#soundType').value||'soft-bell',repeat:$('#repeat').value||'none',vibration:$('#vibrationPattern').value||'standard'};
+const dateDialog=$('#datePickerDialog'), timeDialog=$('#timePickerDialog'), melodyDialog=$('#melodyPickerDialog'), repeatDialog=$('#repeatPickerDialog'), vibrationDialog=$('#vibrationPickerDialog');
+
+function openPicker(dlg){ if(dlg && !dlg.open) dlg.showModal(); }
+function closePicker(dlg){ if(dlg && dlg.open) dlg.close(); }
+
+document.querySelectorAll('[data-close-picker]').forEach(btn=>{
+  btn.onclick=()=>closePicker(btn.closest('dialog'));
+});
+
+document.querySelectorAll('.blue-picker-dialog').forEach(dlg=>{
+  dlg.addEventListener('click',e=>{ if(e.target===dlg) dlg.close(); });
+});
+
+function renderTimeWheel(containerId, values, selected, onPick){
+  const box=$(containerId); if(!box) return;
+  box.innerHTML='';
+  values.forEach(v=>{
+    const b=document.createElement('button');
+    b.type='button'; b.className='wheel-item'+(v===selected?' active':''); b.textContent=v;
+    b.onclick=()=>{ onPick(v); Array.from(box.children).forEach(x=>x.classList.toggle('active',x===b)); };
+    box.appendChild(b);
+  });
+  const active=box.querySelector('.active'); if(active) active.scrollIntoView({block:'center'});
+}
+
+function initTimePicker(){
+  const [h,m]=($('#time').value||'00:00').split(':'); pickerState.hour=h; pickerState.minute=m;
+  renderTimeWheel('#hourWheel',Array.from({length:24},(_,i)=>String(i).padStart(2,'0')),pickerState.hour,v=>pickerState.hour=v);
+  const step=$('#step').value==='15'?15:1;
+  renderTimeWheel('#minuteWheel',Array.from({length:60/step},(_,i)=>String(i*step).padStart(2,'0')),pickerState.minute,v=>pickerState.minute=v);
+}
+$('#timePickerButton').onclick=()=>{ initTimePicker(); openPicker(timeDialog); };
+$('#acceptTimePicker').onclick=()=>{ setTimeValue(`${pickerState.hour}:${pickerState.minute}`); closePicker(timeDialog); };
+
+function openMelodyPicker(){
+  pickerState.melody=$('#soundType').value||'soft-bell';
+  const list=$('#melodyPickerList'); list.innerHTML='';
+  Object.entries(SOUND_NAMES).forEach(([value,label])=>{
+    const row=document.createElement('button'); row.type='button'; row.className='option-row'+(value===pickerState.melody?' active':'');
+    row.innerHTML=`<span>${label}</span><small>${value===pickerState.melody?'Seleccionada':'Tocar para elegir'}</small>`;
+    row.onclick=()=>{ pickerState.melody=value; [...list.children].forEach(x=>x.classList.remove('active')); row.classList.add('active'); $('#soundPickerValue').textContent=label; };
+    list.appendChild(row);
+  });
+  openPicker(melodyDialog);
+}
+$('#soundPickerButton').onclick=openMelodyPicker;
+$('#pickerPreviewSound').onclick=()=>playMelody(pickerState.melody,$('#volume').value);
+$('#acceptMelodyPicker').onclick=()=>{ $('#soundType').value=pickerState.melody; $('#soundPickerValue').textContent=soundName(pickerState.melody); closePicker(melodyDialog); };
+
+const REPEAT_OPTIONS=[['none','Solo una vez'],['5m','Cada 5 minutos'],['daily','Diario'],['weekdays','Días específicos de la semana']];
+function openRepeatPicker(){
+  pickerState.repeat=$('#repeat').value||'none';
+  const list=$('#repeatPickerList'); list.innerHTML='';
+  REPEAT_OPTIONS.forEach(([value,label])=>{
+    const row=document.createElement('button'); row.type='button'; row.className='option-row'+(value===pickerState.repeat?' active':'');
+    row.innerHTML=`<span>${label}</span><small>${value==='weekdays'?'Elige días concretos':'Repetición programada'}</small>`;
+    row.onclick=()=>{ pickerState.repeat=value; [...list.children].forEach(x=>x.classList.remove('active')); row.classList.add('active'); };
+    list.appendChild(row);
+  });
+  openPicker(repeatDialog);
+}
+$('#repeatPickerButton').onclick=openRepeatPicker;
+$('#acceptRepeatPicker').onclick=()=>{ setRepeatValue(pickerState.repeat); closePicker(repeatDialog); };
+
+const VIBRATION_OPTIONS=[['standard','Estándar'],['short','Corta'],['double','Doble'],['triple','Triple'],['long','Larga']];
+function openVibrationPicker(){
+  pickerState.vibration=$('#vibrationPattern').value||'standard';
+  const list=$('#vibrationPickerList'); list.innerHTML='';
+  VIBRATION_OPTIONS.forEach(([value,label])=>{
+    const row=document.createElement('button'); row.type='button'; row.className='option-row'+(value===pickerState.vibration?' active':'');
+    row.innerHTML=`<span>${label}</span><small>${value==='double'?'Dos pulsos':'Patrón de vibración'}</small>`;
+    row.onclick=()=>{ pickerState.vibration=value; [...list.children].forEach(x=>x.classList.remove('active')); row.classList.add('active'); };
+    list.appendChild(row);
+  });
+  openPicker(vibrationDialog);
+}
+$('#vibrationPickerButton').onclick=openVibrationPicker;
+$('#acceptVibrationPicker').onclick=()=>{ setVibrationValue(pickerState.vibration); closePicker(vibrationDialog); };
+
+function sameDay(a,b){ return a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate(); }
+function clampDateToRange(d){
+  const min=new Date(`${$('#date').min}T00:00:00`); const max=new Date(`${$('#date').max}T00:00:00`);
+  if(d<min) return min; if(d>max) return max; return d;
+}
+function renderCalendar(){
+  const grid=$('#calendarGrid'); const label=$('#calendarMonthLabel'); if(!grid||!label) return;
+  const view=new Date(selectedCalendarDate.getFullYear(),selectedCalendarDate.getMonth(),1);
+  const min=new Date(`${$('#date').min}T00:00:00`); const max=new Date(`${$('#date').max}T00:00:00`);
+  label.textContent=`${MONTH_LABEL[view.getMonth()]} ${view.getFullYear()}`;
+  grid.innerHTML='';
+  const start=view.getDay();
+  const days=new Date(view.getFullYear(),view.getMonth()+1,0).getDate();
+  const prevDays=new Date(view.getFullYear(),view.getMonth(),0).getDate();
+  for(let i=0;i<42;i++){
+    const cell=document.createElement('button'); cell.type='button'; cell.className='calendar-day';
+    let d;
+    if(i<start){ d=new Date(view.getFullYear(),view.getMonth()-1,prevDays-start+i+1); cell.classList.add('muted'); }
+    else if(i>=start+days){ d=new Date(view.getFullYear(),view.getMonth()+1,i-(start+days)+1); cell.classList.add('muted'); }
+    else { d=new Date(view.getFullYear(),view.getMonth(),i-start+1); }
+    cell.textContent=d.getDate();
+    const iso=isoDate(d);
+    const disabled=d<min || d>max;
+    if(disabled){ cell.disabled=true; cell.classList.add('disabled'); }
+    if(sameDay(d,new Date())) cell.classList.add('today');
+    if(sameDay(d,selectedCalendarDate)) cell.classList.add('active');
+    cell.onclick=()=>{ selectedCalendarDate=clampDateToRange(d); renderCalendar(); };
+    grid.appendChild(cell);
+  }
+}
+$('#datePickerButton').onclick=()=>{ selectedCalendarDate=clampDateToRange(new Date(`${$('#date').value||isoDate(new Date())}T00:00:00`)); renderCalendar(); openPicker(dateDialog); };
+$('#prevMonthBtn').onclick=()=>{ selectedCalendarDate=new Date(selectedCalendarDate.getFullYear(),selectedCalendarDate.getMonth()-1,1); selectedCalendarDate=clampDateToRange(selectedCalendarDate); renderCalendar(); };
+$('#nextMonthBtn').onclick=()=>{ selectedCalendarDate=new Date(selectedCalendarDate.getFullYear(),selectedCalendarDate.getMonth()+1,1); selectedCalendarDate=clampDateToRange(selectedCalendarDate); renderCalendar(); };
+$('#acceptDatePicker').onclick=()=>{ setDateValue(isoDate(selectedCalendarDate)); closePicker(dateDialog); };
+
 render();
