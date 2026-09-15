@@ -23,39 +23,45 @@ jobs:
       - name: Extraer proyecto Android
         shell: bash
         run: |
-          ZIP_FILE="$(ls -t MiDia-Android-A1*.zip | head -1)"
+          ZIP_FILE="$(ls MiDia-Android-A1*.zip | head -1)"
           echo "Usando: $ZIP_FILE"
           rm -rf MiDia-Android-A1
           unzip -q "$ZIP_FILE"
           test -f MiDia-Android-A1/app/build.gradle
 
       - name: Java 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Preparar Android SDK
+        shell: bash
+        run: |
+          echo "ANDROID_HOME=${ANDROID_HOME:-/usr/local/lib/android/sdk}" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}" >> "$GITHUB_ENV"
+          echo "${ANDROID_HOME:-/usr/local/lib/android/sdk}/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          echo "${ANDROID_HOME:-/usr/local/lib/android/sdk}/platform-tools" >> "$GITHUB_PATH"
 
       - name: Instalar Android 35
+        shell: bash
         run: |
           yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+          sdkmanager "platforms;android-35" "build-tools;35.0.0" "platform-tools"
 
       - name: Gradle 8.9
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
 
-      - name: Compilar APK
+      - name: Compilar APK A4
         working-directory: MiDia-Android-A1
         run: gradle assembleDebug --stacktrace
 
-      - name: Publicar APK
+      - name: Publicar APK A4
         uses: actions/upload-artifact@v4
         with:
-          name: MiDia-v1.4-A2-debug
+          name: MiDia-v1.4-A4-debug
           path: MiDia-Android-A1/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
